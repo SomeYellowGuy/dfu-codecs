@@ -21,7 +21,7 @@ serde_json = { version = "1.0.151", optional = true }
 
 [dev-dependencies]
 dfu-codecs = { path = ".", features = ["json", "either"] }
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.8.2", features = ["html_reports"] }
 serde = { version = "1.0.229", features = ["derive"] }
 
 [[bench]]
