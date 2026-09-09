@@ -1,5 +1,3 @@
-
-
 /// Asserts that encoding the left expression will lead to a success result whose stored result is `$right`.
 ///
 /// # Parameters

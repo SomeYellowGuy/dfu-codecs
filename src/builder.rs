@@ -67,7 +67,7 @@ pub trait RecordBuilder: Sized {
         self,
         ops: &O,
         key: impl Into<String>,
-        value: Option<&impl Encode>,
+        value: &Option<impl Encode>,
     ) -> Self {
         value.encode_optional_field(self, ops, key)
     }

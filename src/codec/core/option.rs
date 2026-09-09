@@ -17,7 +17,7 @@ pub trait OptionalFieldEncode {
     ) -> B;
 }
 
-impl<T> OptionalFieldEncode for Option<&T>
+impl<T> OptionalFieldEncode for Option<T>
 where
     T: Encode,
 {

@@ -1,12 +1,11 @@
-mod transformer;
 mod assertion;
 mod core;
+mod transformer;
 
 use crate::builder::RecordBuilder;
 use crate::dynamic_ops::{DynamicOps, MapLike};
 #[cfg(feature = "json")]
 use crate::json_ops::JsonOpsError;
-use crate::lifecycle::Lifecycle;
 use crate::{DataError, DataResult};
 
 pub use core::list::BoundedVec;
@@ -60,6 +59,18 @@ pub trait Encode {
     }
 }
 
+impl<T: Encode> Encode for &T {
+    fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value> {
+        T::encode(*self, ops, prefix)
+    }
+}
+
+impl<T: Encode> Encode for Box<T> {
+    fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value> {
+        T::encode(self, ops, prefix)
+    }
+}
+
 /// A trait for something that can be decoded from a value represented by a [`DynamicOps`].
 pub trait Decode: Sized {
     /// Decodes a value of this type from a value represented by the provided [`DynamicOps`].
@@ -99,6 +110,12 @@ pub trait Decode: Sized {
     }
 }
 
+impl<T: Decode> Decode for Box<T> {
+    fn decode<O: DynamicOps>(ops: &O, input: &O::Value) -> DataResult<Self> {
+        T::decode(ops, input).map(Box::new)
+    }
+}
+
 /// A trait for something which can be added to a map builder (usually with more than 1 field).
 ///
 /// This is used mostly for encoding structures, and this trait is usually adapted to work with [`Encode`].
@@ -109,12 +126,6 @@ pub trait MapEncode {
         ops: &O,
         prefix: B,
     ) -> B;
-}
-
-impl<T: MapEncode> Encode for T {
-    fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value> {
-        self.map_encode(ops, ops.map_builder()).build(prefix)
-    }
 }
 
 /// A trait for something which can be decoded from a [`MapLike`] (usually with more than 1 field).
@@ -128,14 +139,41 @@ pub trait MapDecode: Sized {
     ) -> DataResult<Self>;
 }
 
-impl<T: MapDecode> Decode for T {
-    fn decode<O: DynamicOps>(ops: &O, input: &O::Value) -> DataResult<Self> {
-        ops.try_map(input)
-            .with_lifecycle(Lifecycle::Stable)
-            .and_then(|map| T::map_decode(ops, map))
-    }
+/// Provides an implementation of `Encode` for a type implementing `MapEncode`.
+#[macro_export]
+macro_rules! encode_from_map_encode {
+    ($ty:ty) => {
+        impl $crate::codec::Encode for $ty {
+            fn encode<O: $crate::DynamicOps>(
+                &self,
+                ops: &O,
+                prefix: O::Value,
+            ) -> $crate::DataResult<O::Value> {
+                <$ty as $crate::codec::MapEncode>::map_encode(self, ops, ops.map_builder())
+                    .build(prefix)
+            }
+        }
+    };
 }
 
+/// Provides an implementation of `Decode` for a type implementing `MapDecode`.
+#[macro_export]
+macro_rules! decode_from_map_decode {
+    ($ty:ty) => {
+        impl $crate::codec::Decode for $ty {
+            fn decode<O: $crate::DynamicOps>(
+                ops: &O,
+                input: &O::Value,
+            ) -> $crate::DataResult<Self> {
+                ops.try_map(input)
+                    .with_lifecycle($crate::Lifecycle::Stable)
+                    .and_then(|map| <$ty as $crate::codec::MapDecode>::map_decode(ops, map))
+            }
+        }
+    };
+}
+
+/// A built-in error for trying to encode or decode something.
 #[derive(Error, Debug)]
 pub enum BuiltInError {
     // Dynamic ops errors

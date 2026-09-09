@@ -100,6 +100,19 @@ impl<T: Decode> Decode for Vec<T> {
     }
 }
 
+impl<T: Clone + Encode, const N: usize> Encode for [T; N] {
+    fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value> {
+        self.to_vec().encode(ops, prefix)
+    }
+}
+
+impl<T: Decode, const N: usize> Decode for [T; N] {
+    fn decode<O: DynamicOps>(ops: &O, input: &O::Value) -> DataResult<Self> {
+        <BoundedVec<T, N, N>>::decode(ops, input)
+            .map(|vec| <[T; N]>::try_from(vec.0).unwrap_or_else(|_| unreachable!()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::json_ops::JsonOps;
