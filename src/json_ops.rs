@@ -4,6 +4,8 @@ use crate::dynamic_ops::{DataType, DynamicOps, MapLike};
 use crate::number::Number;
 use serde_json::{Map, Value};
 use thiserror::Error;
+use crate::codec::BuiltInError;
+use crate::data_result::ErrorMessage;
 
 pub struct JsonOps;
 
@@ -25,6 +27,12 @@ pub enum JsonOpsError {
     CannotAppendListToNotList(String),
     #[error("Cannot append a map to not a map: {0}")]
     CannotAppendMapToNotMap(String),
+}
+
+impl From<JsonOpsError> for ErrorMessage {
+    fn from(value: JsonOpsError) -> Self {
+        ErrorMessage::BuiltIn(BuiltInError::Json(value))
+    }
 }
 
 impl DynamicOps for JsonOps {
@@ -69,7 +77,7 @@ impl DynamicOps for JsonOps {
         Value::Array(value.into_iter().collect())
     }
 
-    fn map(&self, value: impl IntoIterator<Item=(String, Self::Value)>) -> Self::Value {
+    fn map(&self, value: impl IntoIterator<Item = (String, Self::Value)>) -> Self::Value {
         Value::Object(Map::from_iter(value))
     }
 
@@ -247,99 +255,5 @@ impl MapLike for Map<String, Value> {
 
     fn into_entries(self) -> impl Iterator<Item = (String, Self::Value)> {
         self.into_iter().map(|(k, v)| (k, v))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::time::Instant;
-    use serde::{Deserialize, Serialize};
-    use serde_json::json;
-    use super::*;
-    use crate::codec::{Decode, Encode, OptionalFieldDecode};
-
-    #[test]
-    fn test() {
-        #[derive(Debug, Serialize, Deserialize)]
-        struct Test {
-            a: i32,
-            b: String,
-            c: bool,
-            d: Option<Box<Test>>,
-            e: Vec<i8>
-        }
-
-        impl Encode for Test {
-            fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value> {
-                ops.map_builder()
-                    .add_field(ops, "a", &self.a)
-                    .add_field(ops, "b", &self.b)
-                    .add_field(ops, "c", &self.c)
-                    .add_optional_field(ops, "d", self.d.as_deref())
-                    .add_field(ops, "e", &self.e)
-                    .build(prefix)
-            }
-        }
-
-        impl Decode for Test {
-            fn decode<O: DynamicOps>(ops: &O, input: O::Value) -> DataResult<Self> {
-                ops.try_map(input).and_then(|mut m| {
-                    let a = i32::decode_field(&mut m, ops, "a");
-                    let b = String::decode_field(&mut m, ops, "b");
-                    let c = bool::decode_field(&mut m, ops, "c");
-                    let d = Option::<Test>::decode_optional_field(&mut m, ops, "d", true)
-                        .map(|r| r.map(Box::new));
-                    let e = Vec::<i8>::decode_field(&mut m, ops, "e");
-                    DataResult::apply_5(|a, b, c, d, e| Test { a, b, c, d, e }, a, b, c, d, e)
-                })
-            }
-        }
-
-        let test = Test {
-            a: 69,
-            b: "Cool".to_string(),
-            c: true,
-            d: Some(Box::new(Test {
-                a: 30,
-                b: String::new(),
-                c: false,
-                d: None,
-                e: vec![1, 2, 3, -12, -43, 123]
-            })),
-            e: vec![]
-        };
-
-        profile(|| {
-            test.encode_start(&JsonOps);
-        });
-
-        profile(|| {
-            serde_json::to_value(&test).unwrap();
-        });
-
-        let json = json!({
-            "a": "a",
-            "b": "Cool",
-            "c": true,
-            "e": [1, 2, 3, -12, -43, 123]
-        });
-
-        profile(|| {
-            Test::decode(&JsonOps, json.clone());
-        });
-
-        profile(|| {
-            let test: Result<Test, _> = serde_json::from_value(json.clone());
-        });
-    }
-
-    fn profile(f: impl Fn()) {
-        let start = Instant::now();
-        for _ in 0..1_000_000 {
-            f()
-        }
-        let stop = Instant::now();
-
-        println!("Time taken: {:?}", stop.duration_since(start));
     }
 }

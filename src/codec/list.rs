@@ -1,58 +1,22 @@
-use std::error::Error;
 use crate::builder::ListBuilder;
-use crate::codec::{Decode, Encode};
+use crate::codec::{BuiltInError, Decode, Encode};
 use crate::{DataResult, DynamicOps, Lifecycle};
-use std::fmt::{Display, Formatter};
-
-#[derive(Debug)]
-struct ListCodecError {
-    kind: ListCodecErrorKind,
-    size: usize,
-    min_size: usize,
-    max_size: usize,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ListCodecErrorKind {
-    TooShort,
-    TooLong,
-}
-
-impl Display for ListCodecError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ListCodecError {
-                kind: ListCodecErrorKind::TooShort,
-                size,
-                min_size,
-                max_size,
-            } => write!(
-                f,
-                "List is too short: {size}, expected range [{min_size}-{max_size}]"
-            ),
-            ListCodecError {
-                kind: ListCodecErrorKind::TooLong,
-                size,
-                min_size,
-                max_size,
-            } => write!(
-                f,
-                "List is too long: {size}, expected range [{min_size}-{max_size}]"
-            ),
-        }
-    }
-}
-
-impl Error for ListCodecError {}
 
 pub struct BoundedVec<T, const MIN: usize, const MAX: usize>(Vec<T>);
 
 type UnboundedVec<T> = BoundedVec<T, 0, { usize::MAX }>;
 
 impl<T, const MIN: usize, const MAX: usize> BoundedVec<T, MIN, MAX> {
-    fn error(vec: &[T], kind: ListCodecErrorKind) -> ListCodecError {
-        ListCodecError {
-            kind,
+    fn too_short_error(vec: &[T]) -> BuiltInError {
+        BuiltInError::TooShortList {
+            size: vec.len(),
+            min_size: MIN,
+            max_size: MAX,
+        }
+    }
+
+    fn too_long_error(vec: &[T]) -> BuiltInError {
+        BuiltInError::TooLongList {
             size: vec.len(),
             min_size: MIN,
             max_size: MAX,
@@ -66,16 +30,10 @@ fn encode<T: Encode, O: DynamicOps, const MIN: usize, const MAX: usize>(
     prefix: O::Value,
 ) -> DataResult<O::Value> {
     if vec.len() < MIN {
-        return DataResult::error(BoundedVec::<T, MIN, MAX>::error(
-            vec,
-            ListCodecErrorKind::TooShort,
-        ));
+        return DataResult::error(BoundedVec::<T, MIN, MAX>::too_short_error(vec));
     }
     if vec.len() > MAX {
-        return DataResult::error(BoundedVec::<T, MIN, MAX>::error(
-            vec,
-            ListCodecErrorKind::TooLong,
-        ));
+        return DataResult::error(BoundedVec::<T, MIN, MAX>::too_long_error(vec));
     }
     let mut builder = ops.list_builder();
     for element in vec {
@@ -109,7 +67,7 @@ impl<T: Decode, const MIN: usize, const MAX: usize> Decode for BoundedVec<T, MIN
                     )
                 }
                 if elements.len() < MIN {
-                    return DataResult::error(Self::error(&elements, ListCodecErrorKind::TooShort));
+                    return DataResult::error(Self::too_short_error(&elements));
                 }
                 let decoded = BoundedVec(elements);
 

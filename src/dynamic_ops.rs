@@ -1,8 +1,8 @@
-use crate::{DataResult};
+use crate::DataResult;
 use crate::builder::{ListBuilder, RecordBuilder};
+use crate::codec::BuiltInError;
 use crate::number::Number;
 use std::fmt::{Debug, Display};
-use thiserror::Error;
 
 macro_rules! impl_try_list_wrapper {
     ($name:ident | $ty:ty | $type_name:literal) => {
@@ -20,7 +20,7 @@ macro_rules! impl_try_list_wrapper {
                 let mut array = Vec::new();
                 for n in l {
                     let Some(n) = self.try_number(n).into_success() else {
-                        return DataResult::error_string(possible_input_error);
+                        return DataResult::error(possible_input_error);
                     };
                     array.push(<$ty>::from(n));
                 }
@@ -28,12 +28,6 @@ macro_rules! impl_try_list_wrapper {
             })
         }
     };
-}
-
-#[derive(Error, Debug)]
-pub enum GenericOpsError {
-    #[error("Do not know how to append a primitive value {0} to {1}")]
-    DoNotKnowHowToAppendPrimitive(String, String),
 }
 
 pub trait DynamicOps: Sized + 'static {
@@ -102,10 +96,13 @@ pub trait DynamicOps: Sized + 'static {
         value: Self::Value,
     ) -> DataResult<Self::Value> {
         if self.data_type(&prefix) != DataType::Empty {
-            let string_value = value.to_string();
+            let string_value = value.to_string().into();
             return DataResult::partial(
                 value,
-                GenericOpsError::DoNotKnowHowToAppendPrimitive(string_value, prefix.to_string()),
+                BuiltInError::DoNotKnowHowToAppendPrimitive(
+                    string_value,
+                    prefix.to_string().into(),
+                ),
             );
         }
         DataResult::success(value)

@@ -1,20 +1,18 @@
+mod either;
 mod list;
+mod map;
 mod option;
 mod primitive;
-mod map;
-mod either;
 
-use crate::DataResult;
+use std::borrow::Cow;
 use crate::builder::RecordBuilder;
 use crate::dynamic_ops::{DynamicOps, MapLike};
 use crate::lifecycle::Lifecycle;
-use thiserror::Error;
+use crate::{DataError, DataResult};
 pub use list::BoundedVec;
 pub use option::{OptionalFieldDecode, OptionalFieldEncode};
-
-#[derive(Error, Debug)]
-#[error("No key {0} in map MapLike[{{}}]")]
-struct NoKeyError(&'static str);
+use thiserror::Error;
+use crate::json_ops::JsonOpsError;
 
 /// A trait for something that can be encoded by a [`DynamicOps`] to its format.
 pub trait Encode {
@@ -75,7 +73,7 @@ pub trait Decode: Sized {
         name: &'static str,
     ) -> DataResult<Self> {
         let Some(value) = input.remove(name) else {
-            return DataResult::error(NoKeyError(name));
+            return DataResult::error(BuiltInError::NoKey(name.into()));
         };
         Self::decode(ops, value)
     }
@@ -135,4 +133,38 @@ impl<T: MapDecode> Decode for T {
             .with_lifecycle(Lifecycle::Stable)
             .and_then(|map| T::map_decode(ops, map))
     }
+}
+
+#[derive(Error, Debug)]
+pub enum BuiltInError {
+    // Dynamic ops errors
+    #[error("Do not know how to append a primitive value {0} to {1}")]
+    DoNotKnowHowToAppendPrimitive(Box<str>, Box<str>),
+    #[error("Some elements are not {0}: {1}")]
+    SomeElementsAreDifferent(&'static str, Box<str>),
+    
+    #[error("{0}")]
+    Json(JsonOpsError),
+
+    // Codec errors
+    #[error("No key {0} in map MapLike[{{}}]")]
+    NoKey(Cow<'static, str>),
+    #[error("Could not fit {0} to {1}: {2}")]
+    CouldNotFit(&'static str, &'static str, Box<str>),
+    #[error("List is too short: {size}, expected range [{min_size}-{max_size}]")]
+    TooShortList {
+        size: usize,
+        min_size: usize,
+        max_size: usize,
+    },
+    #[error("List is too long: {size}, expected range [{min_size}-{max_size}]")]
+    TooLongList {
+        size: usize,
+        min_size: usize,
+        max_size: usize,
+    },
+    #[error("Duplicate entry for key: '{0}'")]
+    DuplicateEntry(Box<str>),
+    #[error("Failed to parse either. First: {0}; Second: {1}")]
+    FailedToParseEither(Box<DataError>, Box<DataError>),
 }

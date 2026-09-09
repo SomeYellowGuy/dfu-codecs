@@ -1,12 +1,6 @@
 use crate::codec::primitive::sealed::Primitive;
-use crate::codec::{Decode, Encode};
+use crate::codec::{BuiltInError, Decode, Encode};
 use crate::{DataResult, DynamicOps};
-use std::fmt::Display;
-use thiserror::Error;
-
-#[derive(Error, Debug)]
-#[error("Could not fit {0} to {1}: {2}")]
-struct CouldNotFitError(&'static str, &'static str, String);
 
 mod sealed {
     use super::{DataResult, DynamicOps};
@@ -62,10 +56,10 @@ macro_rules! impl_number_and_unsigned {
             fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value> {
                 <$ty>::try_from(*self).map_or_else(
                     |_| {
-                        DataResult::error(CouldNotFitError(
+                        DataResult::error(BuiltInError::CouldNotFit(
                             stringify!($uty),
                             stringify!($ty),
-                            self.to_string(),
+                            self.to_string().into(),
                         ))
                     },
                     |i| i.encode(ops, prefix),
@@ -77,10 +71,10 @@ macro_rules! impl_number_and_unsigned {
                 <$ty>::decode(ops, input).and_then(|i| {
                     <$uty>::try_from(i).map_or_else(
                         |_| {
-                            DataResult::error(CouldNotFitError(
+                            DataResult::error(BuiltInError::CouldNotFit(
                                 stringify!($ty),
                                 stringify!($uty),
-                                i.to_string(),
+                                i.to_string().into(),
                             ))
                         },
                         DataResult::success,
