@@ -9,8 +9,8 @@ pub(crate) fn build() -> TokenStream {
         let n_literal = Literal::string(&n.to_string());
 
         let types = (0..n).into_iter().map(|i| {
-            let upper = format_ident!("{}", ('A' as u8 + i) as char);
-            let lower = format_ident!("{}", ('a' as u8 + i) as char);
+            let upper = format_ident!("{}", (b'A' + i) as char);
+            let lower = format_ident!("{}", (b'a' + i) as char);
             quote! { #upper #lower }
         });
 

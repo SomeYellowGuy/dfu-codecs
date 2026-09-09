@@ -1,8 +1,8 @@
+use crate::DynamicOps;
 use crate::builder::RecordBuilder;
 use crate::codec::{Decode, Encode};
-use crate::data_result::DataResultKind;
+use crate::data_result::{DataResult, DataResultKind};
 use crate::dynamic_ops::MapLike;
-use crate::{DataResult, DynamicOps};
 
 /// A trait for something which can be added to a [`MapLike`] as an optional field with a provided name.
 pub trait OptionalFieldEncode {
@@ -43,7 +43,7 @@ pub trait OptionalFieldDecode: Sized {
     /// However, this method has an extra `lenient` parameter. If it is `true`, errors
     /// while decoding a `Some` option will not occur, and a `None` will be decoded instead.
     fn decode_optional_field<O: DynamicOps>(
-        input: &mut impl MapLike<Value = O::Value>,
+        input: &impl MapLike<Value = O::Value>,
         ops: &O,
         name: &'static str,
         lenient: bool,
@@ -55,13 +55,12 @@ where
     T: Decode,
 {
     fn decode_optional_field<O: DynamicOps>(
-        input: &mut impl MapLike<Value = O::Value>,
+        input: &impl MapLike<Value = O::Value>,
         ops: &O,
         name: &'static str,
         lenient: bool,
     ) -> DataResult<Self> {
-        let value = input.remove(name);
-        let Some(value) = value else {
+        let Some(value) = input.get(name) else {
             return DataResult::success(None);
         };
         let parsed = T::decode(ops, value);

@@ -95,6 +95,7 @@ impl Display for Number {
     }
 }
 
+#[cfg(feature = "json")]
 impl From<Number> for serde_json::Value {
     fn from(num: Number) -> Self {
         match num {
@@ -108,6 +109,7 @@ impl From<Number> for serde_json::Value {
     }
 }
 
+#[cfg(feature = "json")]
 impl From<serde_json::Number> for Number {
     fn from(num: serde_json::Number) -> Self {
         match num {

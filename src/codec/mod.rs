@@ -1,18 +1,19 @@
-mod either;
-mod list;
-mod map;
-mod option;
-mod primitive;
+mod transformer;
+mod assertion;
+mod core;
 
-use std::borrow::Cow;
 use crate::builder::RecordBuilder;
 use crate::dynamic_ops::{DynamicOps, MapLike};
+#[cfg(feature = "json")]
+use crate::json_ops::JsonOpsError;
 use crate::lifecycle::Lifecycle;
 use crate::{DataError, DataResult};
-pub use list::BoundedVec;
-pub use option::{OptionalFieldDecode, OptionalFieldEncode};
+
+pub use core::list::BoundedVec;
+pub use core::option::{OptionalFieldDecode, OptionalFieldEncode};
+
+use std::borrow::Cow;
 use thiserror::Error;
-use crate::json_ops::JsonOpsError;
 
 /// A trait for something that can be encoded by a [`DynamicOps`] to its format.
 pub trait Encode {
@@ -62,17 +63,17 @@ pub trait Encode {
 /// A trait for something that can be decoded from a value represented by a [`DynamicOps`].
 pub trait Decode: Sized {
     /// Decodes a value of this type from a value represented by the provided [`DynamicOps`].
-    fn decode<O: DynamicOps>(ops: &O, input: O::Value) -> DataResult<Self>;
+    fn decode<O: DynamicOps>(ops: &O, input: &O::Value) -> DataResult<Self>;
 
     /// Decodes a value of this type from a map by decoding one of its fields, whose:
     /// - key is the field's `name`.
     /// - value is the value represented by a [`DynamicsOps`] that is meant to be decoded.
     fn decode_field<O: DynamicOps>(
-        input: &mut impl MapLike<Value = O::Value>,
+        input: &impl MapLike<Value = O::Value>,
         ops: &O,
         name: &'static str,
     ) -> DataResult<Self> {
-        let Some(value) = input.remove(name) else {
+        let Some(value) = input.get(name) else {
             return DataResult::error(BuiltInError::NoKey(name.into()));
         };
         Self::decode(ops, value)
@@ -123,12 +124,12 @@ pub trait MapDecode: Sized {
     /// Decodes a value of this type from a map by decoding one or more fields.
     fn map_decode<O: DynamicOps>(
         ops: &O,
-        input: impl MapLike<Value = O::Value>,
+        input: &impl MapLike<Value = O::Value>,
     ) -> DataResult<Self>;
 }
 
 impl<T: MapDecode> Decode for T {
-    fn decode<O: DynamicOps>(ops: &O, input: O::Value) -> DataResult<Self> {
+    fn decode<O: DynamicOps>(ops: &O, input: &O::Value) -> DataResult<Self> {
         ops.try_map(input)
             .with_lifecycle(Lifecycle::Stable)
             .and_then(|map| T::map_decode(ops, map))
@@ -142,7 +143,8 @@ pub enum BuiltInError {
     DoNotKnowHowToAppendPrimitive(Box<str>, Box<str>),
     #[error("Some elements are not {0}: {1}")]
     SomeElementsAreDifferent(&'static str, Box<str>),
-    
+
+    #[cfg(feature = "json")]
     #[error("{0}")]
     Json(JsonOpsError),
 

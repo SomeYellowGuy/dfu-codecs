@@ -1,32 +1,32 @@
 use crate::DataResult;
 use crate::builder::{ListBuilder, RecordBuilder};
+use crate::codec::BuiltInError;
+use crate::data_result::ErrorMessage;
 use crate::dynamic_ops::{DataType, DynamicOps, MapLike};
 use crate::number::Number;
 use serde_json::{Map, Value};
 use thiserror::Error;
-use crate::codec::BuiltInError;
-use crate::data_result::ErrorMessage;
 
 pub struct JsonOps;
 
 #[derive(Error, Debug)]
 pub enum JsonOpsError {
     #[error("Not a number: {0}")]
-    NotNumber(Value),
+    NotNumber(Box<str>),
     #[error("Not a boolean: {0}")]
-    NotBool(Value),
+    NotBool(Box<str>),
     #[error("Not a string: {0}")]
-    NotString(Value),
+    NotString(Box<str>),
     #[error("Not a JSON array: {0}")]
-    NotArray(Value),
+    NotArray(Box<str>),
     #[error("Not a JSON object: {0}")]
-    NotObject(Value),
+    NotObject(Box<str>),
     #[error("mergeToList called with not a list: {0}")]
-    MergeCalledWithNoList(Value),
+    MergeCalledWithNoList(Box<str>),
     #[error("Cannot append a list to not a list: {0}")]
-    CannotAppendListToNotList(String),
+    CannotAppendListToNotList(Box<str>),
     #[error("Cannot append a map to not a map: {0}")]
-    CannotAppendMapToNotMap(String),
+    CannotAppendMapToNotMap(Box<str>),
 }
 
 impl From<JsonOpsError> for ErrorMessage {
@@ -81,43 +81,46 @@ impl DynamicOps for JsonOps {
         Value::Object(Map::from_iter(value))
     }
 
-    fn try_number(&self, input: Self::Value) -> DataResult<Number> {
+    fn try_number(&self, input: &Self::Value) -> DataResult<Number> {
         if let Value::Number(n) = input {
-            DataResult::success(n.into())
+            DataResult::success(n.clone().into())
         } else {
-            DataResult::error(JsonOpsError::NotNumber(input))
+            DataResult::error(JsonOpsError::NotNumber(input.to_string().into()))
         }
     }
 
-    fn try_bool(&self, input: Self::Value) -> DataResult<bool> {
+    fn try_bool(&self, input: &Self::Value) -> DataResult<bool> {
         if let Value::Bool(b) = input {
-            DataResult::success(b)
+            DataResult::success(*b)
         } else {
-            DataResult::error(JsonOpsError::NotBool(input))
+            DataResult::error(JsonOpsError::NotBool(input.to_string().into()))
         }
     }
 
-    fn try_string(&self, input: Self::Value) -> DataResult<String> {
+    fn try_string(&self, input: &Self::Value) -> DataResult<String> {
         if let Value::String(s) = input {
-            DataResult::success(s)
+            DataResult::success(s.clone())
         } else {
-            DataResult::error(JsonOpsError::NotString(input))
+            DataResult::error(JsonOpsError::NotString(input.to_string().into()))
         }
     }
 
-    fn try_list(&self, input: Self::Value) -> DataResult<Vec<Self::Value>> {
+    fn try_list<'a>(&self, input: &'a Self::Value) -> DataResult<&'a [Value]> {
         if let Value::Array(array) = input {
             DataResult::success(array)
         } else {
-            DataResult::error(JsonOpsError::NotArray(input))
+            DataResult::error(JsonOpsError::NotArray(input.to_string().into()))
         }
     }
 
-    fn try_map(&self, input: Self::Value) -> DataResult<impl MapLike<Value = Self::Value>> {
+    fn try_map<'a>(
+        &self,
+        input: &'a Self::Value,
+    ) -> DataResult<&'a impl MapLike<Value = Self::Value>> {
         if let Value::Object(map) = input {
             DataResult::success(map)
         } else {
-            DataResult::error(JsonOpsError::NotObject(input))
+            DataResult::error(JsonOpsError::NotObject(input.to_string().into()))
         }
     }
 
@@ -136,7 +139,7 @@ impl DynamicOps for JsonOps {
                 vec.push(value);
                 DataResult::success(Value::Array(vec))
             }
-            _ => DataResult::error(JsonOpsError::MergeCalledWithNoList(list)),
+            _ => DataResult::error(JsonOpsError::MergeCalledWithNoList(list.to_string().into())),
         }
     }
 }
@@ -184,7 +187,7 @@ impl ListBuilder for ArrayBuilder {
                     let prefix_string = prefix.to_string();
                     return DataResult::partial(
                         prefix,
-                        JsonOpsError::CannotAppendListToNotList(prefix_string),
+                        JsonOpsError::CannotAppendListToNotList(prefix_string.to_string().into()),
                     );
                 }
             };
@@ -218,7 +221,10 @@ impl ObjectBuilder {
             }
             _ => {
                 let string_prefix = prefix.to_string();
-                DataResult::partial(prefix, JsonOpsError::CannotAppendMapToNotMap(string_prefix))
+                DataResult::partial(
+                    prefix,
+                    JsonOpsError::CannotAppendMapToNotMap(string_prefix.to_string().into()),
+                )
             }
         }
     }
@@ -249,11 +255,7 @@ impl MapLike for Map<String, Value> {
         self.get(key)
     }
 
-    fn remove(&mut self, key: &str) -> Option<Self::Value> {
-        self.remove(key)
-    }
-
-    fn into_entries(self) -> impl Iterator<Item = (String, Self::Value)> {
-        self.into_iter().map(|(k, v)| (k, v))
+    fn entries(&self) -> impl Iterator<Item = (&str, &Self::Value)> {
+        self.into_iter().map(|(k, v)| (k.as_str(), v))
     }
 }

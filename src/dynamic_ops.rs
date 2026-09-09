@@ -6,8 +6,8 @@ use std::fmt::{Debug, Display};
 
 macro_rules! impl_try_list_wrapper {
     ($name:ident | $ty:ty | $type_name:literal) => {
-        fn $name(&self, input: Self::Value) -> DataResult<Vec<$ty>> {
-            if self.data_type(&input) != DataType::List {
+        fn $name(&self, input: &Self::Value) -> DataResult<Vec<$ty>> {
+            if self.data_type(input) != DataType::List {
                 // This check guarantees that the data type is a list, so we can
                 // safely return the result directly.
                 // TODO: Put unwrap error here
@@ -19,7 +19,7 @@ macro_rules! impl_try_list_wrapper {
             self.try_list(input).and_then(|l| {
                 let mut array = Vec::new();
                 for n in l {
-                    let Some(n) = self.try_number(n).into_success() else {
+                    let Some(n) = self.try_number(&n).into_success() else {
                         return DataResult::error(possible_input_error);
                     };
                     array.push(<$ty>::from(n));
@@ -30,6 +30,8 @@ macro_rules! impl_try_list_wrapper {
     };
 }
 
+/// A trait describing methods to read and write a specific format (like NBT or JSON).
+/// The `Value` of this trait is the type that can be used to represent anything in this format.
 pub trait DynamicOps: Sized + 'static {
     type Value: Debug + Display + Clone;
 
@@ -62,13 +64,13 @@ pub trait DynamicOps: Sized + 'static {
     fn string(&self, value: String) -> Self::Value;
 
     fn byte_buffer(&self, value: &[i8]) -> Self::Value {
-        self.list(value.iter().map(|v| self.byte(*v)))
+        self.list(value.iter().map(|&v| self.byte(v)))
     }
     fn int_stream(&self, value: &[i32]) -> Self::Value {
-        self.list(value.iter().map(|v| self.int(*v)))
+        self.list(value.iter().map(|&v| self.int(v)))
     }
     fn long_stream(&self, value: &[i64]) -> Self::Value {
-        self.list(value.iter().map(|v| self.long(*v)))
+        self.list(value.iter().map(|&v| self.long(v)))
     }
 
     fn data_type(&self, value: &Self::Value) -> DataType;
@@ -76,16 +78,19 @@ pub trait DynamicOps: Sized + 'static {
     fn list(&self, value: impl IntoIterator<Item = Self::Value>) -> Self::Value;
     fn map(&self, value: impl IntoIterator<Item = (String, Self::Value)>) -> Self::Value;
 
-    fn try_number(&self, input: Self::Value) -> DataResult<Number>;
-    fn try_bool(&self, input: Self::Value) -> DataResult<bool>;
-    fn try_string(&self, input: Self::Value) -> DataResult<String>;
+    fn try_number(&self, input: &Self::Value) -> DataResult<Number>;
+    fn try_bool(&self, input: &Self::Value) -> DataResult<bool>;
+    fn try_string(&self, input: &Self::Value) -> DataResult<String>;
 
     impl_try_list_wrapper!(try_byte_list | i8 | "bytes");
     impl_try_list_wrapper!(try_int_list | i32 | "ints");
     impl_try_list_wrapper!(try_long_list | i64 | "longs");
 
-    fn try_list(&self, input: Self::Value) -> DataResult<Vec<Self::Value>>;
-    fn try_map(&self, input: Self::Value) -> DataResult<impl MapLike<Value = Self::Value>>;
+    fn try_list<'a>(&self, input: &'a Self::Value) -> DataResult<&'a [Self::Value]>;
+    fn try_map<'a>(
+        &self,
+        input: &'a Self::Value,
+    ) -> DataResult<&'a impl MapLike<Value = Self::Value>>;
 
     fn list_builder(&self) -> impl ListBuilder<Value = Self::Value>;
     fn map_builder(&self) -> impl RecordBuilder<Value = Self::Value>;
@@ -134,12 +139,11 @@ pub enum DataType {
     Map,
 }
 
+/// Provides common methods to read a specific entry or all entries of a map.
 pub trait MapLike {
     type Value: Display;
 
     fn get(&self, key: &str) -> Option<&Self::Value>;
 
-    fn remove(&mut self, key: &str) -> Option<Self::Value>;
-
-    fn into_entries(self) -> impl Iterator<Item = (String, Self::Value)>;
+    fn entries(&self) -> impl Iterator<Item = (&str, &Self::Value)>;
 }

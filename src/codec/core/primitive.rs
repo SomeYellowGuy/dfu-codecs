@@ -1,15 +1,17 @@
-use crate::codec::primitive::sealed::Primitive;
+use crate::DynamicOps;
+use crate::codec::core::primitive::sealed::Primitive;
 use crate::codec::{BuiltInError, Decode, Encode};
-use crate::{DataResult, DynamicOps};
+use crate::data_result::DataResult;
 
 mod sealed {
-    use super::{DataResult, DynamicOps};
+    use crate::DynamicOps;
+    use crate::data_result::DataResult;
 
     /// Sealed trait to easily implement `Encode` and `Decode` for
     /// primitive DFU types.
     pub trait Primitive: Sized {
         fn primitive_encode<O: DynamicOps>(&self, ops: &O) -> O::Value;
-        fn primitive_decode<O: DynamicOps>(ops: &O, input: O::Value) -> DataResult<Self>;
+        fn primitive_decode<O: DynamicOps>(ops: &O, input: &O::Value) -> DataResult<Self>;
     }
 }
 
@@ -23,7 +25,7 @@ macro_rules! primitive_blanket_impl {
             }
 
             impl Decode for $ty {
-                fn decode<O: DynamicOps>(ops: &O, input: O::Value) -> DataResult<Self> {
+                fn decode<O: DynamicOps>(ops: &O, input: &O::Value) -> DataResult<Self> {
                     <$ty>::primitive_decode(ops, input)
                 }
             }
@@ -38,7 +40,7 @@ macro_rules! impl_number {
                 ops.$create_func(*self)
             }
 
-            fn primitive_decode<O: DynamicOps>(ops: &O, input: O::Value) -> DataResult<Self> {
+            fn primitive_decode<O: DynamicOps>(ops: &O, input: &O::Value) -> DataResult<Self> {
                 ops.try_number(input).map(|n| <$ty>::from(n))
             }
         }
@@ -67,7 +69,7 @@ macro_rules! impl_number_and_unsigned {
             }
         }
         impl Decode for $uty {
-            fn decode<O: DynamicOps>(ops: &O, input: O::Value) -> DataResult<Self> {
+            fn decode<O: DynamicOps>(ops: &O, input: &O::Value) -> DataResult<Self> {
                 <$ty>::decode(ops, input).and_then(|i| {
                     <$uty>::try_from(i).map_or_else(
                         |_| {
@@ -98,7 +100,7 @@ impl Primitive for bool {
         ops.bool(*self)
     }
 
-    fn primitive_decode<O: DynamicOps>(ops: &O, input: O::Value) -> DataResult<Self> {
+    fn primitive_decode<O: DynamicOps>(ops: &O, input: &O::Value) -> DataResult<Self> {
         ops.try_bool(input)
     }
 }
@@ -108,7 +110,7 @@ impl Primitive for String {
         ops.string(self.clone())
     }
 
-    fn primitive_decode<O: DynamicOps>(ops: &O, input: O::Value) -> DataResult<Self> {
+    fn primitive_decode<O: DynamicOps>(ops: &O, input: &O::Value) -> DataResult<Self> {
         ops.try_string(input)
     }
 }
@@ -118,7 +120,7 @@ primitive_blanket_impl!(bool, String);
 macro_rules! wrapper {
     ($stream:ident, $ty:ty, $create_func:ident, $get_func:ident) => {
         #[doc = concat!("A wrapper of a [`Vec<", stringify!($ty), ">`] that has a built-in Encode and Decode implementation.")]
-        #[derive(Debug, Clone)]
+        #[derive(Debug, Clone, PartialEq, Eq)]
         pub struct $stream(pub Vec<$ty>);
 
         impl From<Vec<$ty>> for $stream {
@@ -138,7 +140,7 @@ macro_rules! wrapper {
                 ops.$create_func(&self.0)
             }
 
-            fn primitive_decode<O: DynamicOps>(ops: &O, input: O::Value) -> DataResult<Self> {
+            fn primitive_decode<O: DynamicOps>(ops: &O, input: &O::Value) -> DataResult<Self> {
                 ops.$get_func(input).map($stream)
             }
         }
@@ -149,3 +151,50 @@ macro_rules! wrapper {
 wrapper!(ByteBuffer, i8, byte_buffer, try_byte_list);
 wrapper!(IntStream, i32, int_stream, try_int_list);
 wrapper!(LongStream, i64, long_stream, try_long_list);
+
+#[cfg(test)]
+mod tests {
+    use crate::codec::core::primitive::{ByteBuffer, IntStream, LongStream};
+    use crate::json_ops::JsonOps;
+    use crate::{assert_decode_error, assert_decode_success, assert_encode_success};
+    use serde_json::json;
+
+    #[test]
+    fn encoding() {
+        assert_encode_success!(JsonOps, 75 => json!(75));
+        assert_encode_success!(JsonOps, -103i8 => json!(-103));
+        assert_encode_success!(JsonOps, -123_847_234 => json!(-123_847_234));
+        assert_encode_success!(JsonOps, false => json!(false));
+        assert_encode_success!(JsonOps, "Hello, world!".to_string() => json!("Hello, world!"));
+        assert_encode_success!(JsonOps, String::new() => json!(""));
+
+        assert_encode_success!(JsonOps, ByteBuffer::from(vec![1, 2, 3]) => json!([1, 2, 3]));
+        assert_encode_success!(
+            JsonOps,
+            IntStream::from(vec![3, 6, 9, 11, 15]) =>
+            json!([3, 6, 9, 11, 15])
+        );
+        assert_encode_success!(
+            JsonOps,
+            LongStream::from(vec![4, 6, 9, 12]) =>
+            json!([4, 6, 9, 12])
+        );
+    }
+
+    #[test]
+    fn decoding() {
+        assert_decode_success!(JsonOps, i32, json!(8) => 8);
+        assert_decode_success!(JsonOps, i32, json!(4.5) => 4);
+        assert_decode_success!(JsonOps, i64, json!(2412.234) => 2412);
+        assert_decode_error!(JsonOps, u32, json!(-45) => "Could not fit i32 to u32: -45");
+        assert_decode_success!(JsonOps, i8, json!(1000) => -24);
+        assert_decode_error!(JsonOps, bool, json!("hello") => "Not a boolean: \"hello\"");
+        assert_decode_error!(JsonOps, bool, json!(0) => "Not a boolean: 0");
+        assert_decode_success!(JsonOps, String, json!("cool") => "cool");
+        assert_decode_error!(JsonOps, String, json!(1) => "Not a string: 1");
+
+        assert_decode_success!(JsonOps, IntStream, json!([1, 2, 3]) => IntStream::from(vec![1, 2, 3]));
+        assert_decode_success!(JsonOps, LongStream, json!([]) => LongStream::from(vec![]));
+        assert_decode_error!(JsonOps, ByteBuffer, json!("Sample Text") => "Not a JSON array: \"Sample Text\"");
+    }
+}

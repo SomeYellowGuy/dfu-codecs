@@ -8,9 +8,16 @@ build = "build/build.rs"
 proc-macro2 = "1.0.107"
 quote = "1.0.47"
 
+[features]
+json = ["dep:serde_json"]
+
+either = ["dep:either"]
+
 [dependencies]
-either = "1.18.0"
+either = { version = "1.18.0", optional = true }
 smallvec = "1.15.2"
-serde_json = "1.0.151"
-serde = { version = "1.0.229", features = ["derive"] }
 thiserror = "2.0.20"
+serde_json = { version = "1.0.151", optional = true }
+
+[dev-dependencies]
+codecs = { path = ".", features = ["json", "either"] }
