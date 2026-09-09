@@ -1,9 +1,9 @@
-use codecs::codec::{Decode, Encode, MapDecode, MapEncode, OptionalFieldDecode};
-use codecs::{
+use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
+use dfu_codecs::codec::{Decode, Encode, MapDecode, MapEncode, OptionalFieldDecode};
+use dfu_codecs::{
     DataResult, DynamicOps, JsonOps, MapLike, RecordBuilder, decode_from_map_decode,
     encode_from_map_encode,
 };
-use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
