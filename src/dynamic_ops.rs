@@ -1,7 +1,7 @@
-use crate::{DataResult, DefaultListBuilder};
 use crate::builder::{ListBuilder, RecordBuilder};
 use crate::codec::BuiltInError;
 use crate::number::Number;
+use crate::{DataResult, DefaultListBuilder};
 use std::fmt::{Debug, Display};
 
 macro_rules! impl_try_list_wrapper {
@@ -79,7 +79,7 @@ pub trait DynamicOps: Sized + 'static {
     fn map(&self, value: impl IntoIterator<Item = (String, Self::Value)>) -> Self::Value;
 
     fn try_number(&self, input: &Self::Value) -> DataResult<Number>;
-    
+
     fn try_byte(&self, input: &Self::Value) -> DataResult<i8> {
         self.try_number(input).map(i8::from)
     }
@@ -98,7 +98,7 @@ pub trait DynamicOps: Sized + 'static {
     fn try_double(&self, input: &Self::Value) -> DataResult<f64> {
         self.try_number(input).map(f64::from)
     }
-    
+
     fn try_bool(&self, input: &Self::Value) -> DataResult<bool>;
     fn try_string(&self, input: &Self::Value) -> DataResult<String>;
 

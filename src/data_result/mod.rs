@@ -4,9 +4,9 @@ mod traits;
 
 use crate::lifecycle::Lifecycle;
 pub use error::{DataError, ErrorMessage};
+use smallvec::SmallVec;
 pub use smallvec::smallvec;
 use std::fmt::Debug;
-use smallvec::SmallVec;
 pub use traits::{DataTryFrom, DataTryInto};
 
 /// A result of encoding or decoding something.
@@ -333,12 +333,17 @@ impl<R> DataResult<R> {
     /// - If both results are successful, the returned one is also a success.
     /// - If at least one of the results is not a success, and neither result is failed, the returned one is a partial.
     /// - Otherwise, the returned one is a failed result.
-    pub fn apply_2<A, B>(f: impl FnOnce(A, B) -> R,
-                         a: DataResult<A>, b: DataResult<B>,
+    pub fn apply_2<A, B>(
+        f: impl FnOnce(A, B) -> R,
+        a: DataResult<A>,
+        b: DataResult<B>,
     ) -> DataResult<R> {
         let resultant_lifecycle = a.lifecycle + b.lifecycle;
         if a.is_success() && b.is_success() {
-            return DataResult::success_with_lifecycle(f(a.unwrap(), b.unwrap()), resultant_lifecycle);
+            return DataResult::success_with_lifecycle(
+                f(a.unwrap(), b.unwrap()),
+                resultant_lifecycle,
+            );
         }
 
         let mut error = DataError(SmallVec::new());
@@ -350,7 +355,10 @@ impl<R> DataResult<R> {
             _ => None,
         };
 
-        Self::new(DataResultKind::Error { partial, error }, resultant_lifecycle)
+        Self::new(
+            DataResultKind::Error { partial, error },
+            resultant_lifecycle,
+        )
     }
 
     /// Combines the values inside 2 results, applying them in `f` if all results have values.

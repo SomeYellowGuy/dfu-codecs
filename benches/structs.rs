@@ -85,13 +85,20 @@ decode_from_map_decode!(Abcd);
 pub struct Unit;
 
 impl MapEncode for Unit {
-    fn map_encode<O: DynamicOps, B: RecordBuilder<Value=O::Value>>(&self, _ops: &O, prefix: B) -> B {
+    fn map_encode<O: DynamicOps, B: RecordBuilder<Value = O::Value>>(
+        &self,
+        _ops: &O,
+        prefix: B,
+    ) -> B {
         prefix
     }
 }
 encode_from_map_encode!(Unit);
 impl MapDecode for Unit {
-    fn map_decode<O: DynamicOps>(_ops: &O, _input: &impl MapLike<Value=O::Value>) -> DataResult<Self> {
+    fn map_decode<O: DynamicOps>(
+        _ops: &O,
+        _input: &impl MapLike<Value = O::Value>,
+    ) -> DataResult<Self> {
         DataResult::success(Unit)
     }
 }
@@ -100,9 +107,7 @@ decode_from_map_decode!(Unit);
 bench_encode_and_decode_with_serde!(
     unit_benches,
     Unit,
-    encode {
-        unit_encode: Unit
-    },
+    encode { unit_encode: Unit },
     decode {
         unit_decode: json!({})
     }

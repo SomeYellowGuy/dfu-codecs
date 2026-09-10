@@ -24,6 +24,9 @@ dfu-codecs = { path = ".", features = ["json", "either"] }
 criterion = { version = "0.8.2", features = ["html_reports"] }
 serde = { version = "1.0.229", features = ["derive"] }
 
+[profile.bench]
+debug = true
+
 [[bench]]
 name = "primitives"
 harness = false
@@ -36,3 +39,6 @@ harness = false
 [[bench]]
 name = "map"
 harness = false
+[profile.samply]
+inherits = "release"
+debug = true

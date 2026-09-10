@@ -5,8 +5,8 @@ macro_rules! bench_encode_and_decode_with_serde {
             fn $encode_name (c: &mut criterion::Criterion) {
                 let mut group = c.benchmark_group(stringify!($encode_name));
                 let value: $ty = $values_to_encode;
-                group.bench_function("dfu", |b| b.iter_batched(|| (), |()| dfu_codecs::codec::Encode::encode_start(&value, &dfu_codecs::JsonOps), criterion::BatchSize::SmallInput));
-                group.bench_function("serde", |b| b.iter_batched(|| (), |()| serde_json::to_value(&value), criterion::BatchSize::SmallInput));
+                group.bench_function("dfu", |b| b.iter(|| dfu_codecs::codec::Encode::encode_start(&value, &dfu_codecs::JsonOps)));
+                group.bench_function("serde", |b| b.iter(|| serde_json::to_value(&value)));
                 group.finish();
             }
         )+
@@ -15,7 +15,7 @@ macro_rules! bench_encode_and_decode_with_serde {
             fn $decode_name (c: &mut criterion::Criterion) {
                 let mut group = c.benchmark_group(stringify!($decode_name));
                 let value: serde_json::Value = $values_to_decode;
-                group.bench_function("dfu", |b| b.iter_batched(|| (), |()| <$ty as dfu_codecs::codec::Decode>::decode(&dfu_codecs::JsonOps, &value), criterion::BatchSize::SmallInput));
+                group.bench_function("dfu", |b| b.iter(|| <$ty as dfu_codecs::codec::Decode>::decode(&dfu_codecs::JsonOps, &value)));
                 group.bench_function("serde", |b| b.iter_batched(|| value.clone(), |v| serde_json::from_value::<$ty>(v), criterion::BatchSize::SmallInput));
                 group.finish();
             }
