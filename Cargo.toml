@@ -25,5 +25,5 @@ criterion = { version = "0.8.2", features = ["html_reports"] }
 serde = { version = "1.0.229", features = ["derive"] }
 
 [[bench]]
-name = "book"
+name = "primitives"
 harness = false
