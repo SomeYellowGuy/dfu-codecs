@@ -1,4 +1,4 @@
-use crate::DataResult;
+use crate::{DataResult, DefaultListBuilder};
 use crate::builder::{ListBuilder, RecordBuilder};
 use crate::codec::BuiltInError;
 use crate::number::Number;
@@ -79,6 +79,26 @@ pub trait DynamicOps: Sized + 'static {
     fn map(&self, value: impl IntoIterator<Item = (String, Self::Value)>) -> Self::Value;
 
     fn try_number(&self, input: &Self::Value) -> DataResult<Number>;
+    
+    fn try_byte(&self, input: &Self::Value) -> DataResult<i8> {
+        self.try_number(input).map(i8::from)
+    }
+    fn try_short(&self, input: &Self::Value) -> DataResult<i16> {
+        self.try_number(input).map(i16::from)
+    }
+    fn try_int(&self, input: &Self::Value) -> DataResult<i32> {
+        self.try_number(input).map(i32::from)
+    }
+    fn try_long(&self, input: &Self::Value) -> DataResult<i64> {
+        self.try_number(input).map(i64::from)
+    }
+    fn try_float(&self, input: &Self::Value) -> DataResult<f32> {
+        self.try_number(input).map(f32::from)
+    }
+    fn try_double(&self, input: &Self::Value) -> DataResult<f64> {
+        self.try_number(input).map(f64::from)
+    }
+    
     fn try_bool(&self, input: &Self::Value) -> DataResult<bool>;
     fn try_string(&self, input: &Self::Value) -> DataResult<String>;
 
@@ -92,7 +112,9 @@ pub trait DynamicOps: Sized + 'static {
         input: &'a Self::Value,
     ) -> DataResult<&'a impl MapLike<Value = Self::Value>>;
 
-    fn list_builder(&self) -> impl ListBuilder<Value = Self::Value>;
+    fn list_builder(&self, capacity: usize) -> impl ListBuilder<Value = Self::Value> {
+        DefaultListBuilder::new(self, capacity)
+    }
     fn map_builder(&self) -> impl RecordBuilder<Value = Self::Value>;
 
     fn merge_to_primitive(

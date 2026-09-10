@@ -35,7 +35,7 @@ fn encode<T: Encode, O: DynamicOps, const MIN: usize, const MAX: usize>(
     if vec.len() > MAX {
         return DataResult::error(BoundedVec::<T, MIN, MAX>::too_long_error(vec.len()));
     }
-    let mut builder = ops.list_builder();
+    let mut builder = ops.list_builder(vec.len());
     for element in vec {
         builder = builder.add_result(element.encode_start(ops));
     }

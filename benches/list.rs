@@ -1,17 +1,26 @@
 use criterion::{criterion_group, criterion_main};
-use dfu_codecs::codec::BoundedVec;
+use dfu_codecs::codec::{BoundedVec, Encode};
 use serde_json::json;
+use dfu_codecs::JsonOps;
 
 mod common;
+
+fn vec() -> Vec<i64> {
+    (1..100).into_iter().collect()
+}
+
+fn vec_json() -> serde_json::Value {
+    vec().encode_start(&JsonOps).unwrap()
+}
 
 bench_encode_and_decode_with_serde!(
     vec_benches,
     Vec<i64>,
     encode {
-        vec_encode: vec![1000, 2000, 3000, -40000],
+        vec_encode: vec(),
     },
     decode {
-        vec_decode: json!([1000, 2000, 3000, -40000]),
+        vec_decode: json!(vec_json()),
         vec_decode_wrong_type: json!([1000, 2000, 3000, "not a number"])
     }
 );

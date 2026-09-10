@@ -4,7 +4,7 @@ use quote::{format_ident, quote};
 pub(crate) fn build() -> TokenStream {
     let mut stream = TokenStream::new();
 
-    for n in 2..=16 {
+    for n in 3..=16 {
         let ident = format_ident!("apply_{n}");
         let n_literal = Literal::string(&n.to_string());
 

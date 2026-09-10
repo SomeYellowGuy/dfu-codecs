@@ -35,6 +35,31 @@ impl From<JsonOpsError> for ErrorMessage {
     }
 }
 
+macro_rules! number_impl {
+    ($ty: ty => $create_fn: ident | $try_fn: ident) => {
+        #[inline]
+        fn $create_fn(&self, value: $ty) -> Self::Value {
+            value.into()
+        }
+
+        #[inline]
+        fn $try_fn(&self, input: &Self::Value) -> DataResult<$ty> {
+            let Value::Number(n) = input else {
+                return DataResult::error(JsonOpsError::NotNumber(input.to_string().into()));
+            };
+            if let Some(u) = n.as_u64() {
+                DataResult::success(u as $ty)
+            } else if let Some(i) = n.as_i64() {
+                DataResult::success(i as $ty)
+            } else if let Some(f) = n.as_f64() {
+                DataResult::success(f as $ty)
+            } else {
+                panic!("number should have matched a case: {input:?}");
+            }
+        }
+    };
+}
+
 impl DynamicOps for JsonOps {
     type Value = Value;
 
@@ -53,6 +78,13 @@ impl DynamicOps for JsonOps {
     fn number(&self, value: Number) -> Self::Value {
         value.into()
     }
+
+    number_impl!(i8 => byte | try_byte);
+    number_impl!(i16 => short | try_short);
+    number_impl!(i32 => int | try_int);
+    number_impl!(i64 => long | try_long);
+    number_impl!(f32 => float | try_float);
+    number_impl!(f64 => double | try_double);
 
     fn bool(&self, value: bool) -> Self::Value {
         Value::Bool(value)
@@ -124,8 +156,8 @@ impl DynamicOps for JsonOps {
         }
     }
 
-    fn list_builder(&self) -> impl ListBuilder<Value = Value> {
-        ArrayBuilder::new()
+    fn list_builder(&self, capacity: usize) -> impl ListBuilder<Value = Value> {
+        ArrayBuilder::new(capacity)
     }
 
     fn map_builder(&self) -> impl RecordBuilder<Value = Value> {
@@ -147,8 +179,8 @@ impl DynamicOps for JsonOps {
 pub struct ArrayBuilder(DataResult<Vec<Value>>);
 
 impl ArrayBuilder {
-    pub fn new() -> Self {
-        Self(DataResult::success(Vec::new()))
+    pub fn new(capacity: usize) -> Self {
+        Self(DataResult::success(Vec::with_capacity(capacity)))
     }
 }
 
@@ -184,10 +216,10 @@ impl ListBuilder for ArrayBuilder {
                     prefix_vec
                 }
                 _ => {
-                    let prefix_string = prefix.to_string();
+                    let prefix_string = prefix.to_string().into();
                     return DataResult::partial(
                         prefix,
-                        JsonOpsError::CannotAppendListToNotList(prefix_string.to_string().into()),
+                        JsonOpsError::CannotAppendListToNotList(prefix_string),
                     );
                 }
             };

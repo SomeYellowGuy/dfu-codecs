@@ -19,12 +19,14 @@ macro_rules! primitive_blanket_impl {
     ( $($ty:ty),+ ) => {
         $(
             impl Encode for $ty {
-            fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value> {
+                #[inline]
+                fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value> {
                     ops.merge_to_primitive(prefix, self.primitive_encode(ops))
                 }
             }
 
             impl Decode for $ty {
+                #[inline]
                 fn decode<O: DynamicOps>(ops: &O, input: &O::Value) -> DataResult<Self> {
                     <$ty>::primitive_decode(ops, input)
                 }
@@ -34,14 +36,16 @@ macro_rules! primitive_blanket_impl {
 }
 
 macro_rules! impl_number {
-    ($ty:ty, $create_func:ident) => {
+    ($ty:ty, $create_func:ident, $try_func:ident) => {
         impl Primitive for $ty {
+            #[inline]
             fn primitive_encode<O: DynamicOps>(&self, ops: &O) -> O::Value {
                 ops.$create_func(*self)
             }
 
+            #[inline]
             fn primitive_decode<O: DynamicOps>(ops: &O, input: &O::Value) -> DataResult<Self> {
-                ops.try_number(input).map(|n| <$ty>::from(n))
+                ops.$try_func(input)
             }
         }
 
@@ -50,11 +54,12 @@ macro_rules! impl_number {
 }
 
 macro_rules! impl_number_and_unsigned {
-    ($ty:ty, $uty:ty, $create_func:ident) => {
-        impl_number!($ty, $create_func);
+    ($ty:ty, $uty:ty, $create_func:ident, $try_func:ident) => {
+        impl_number!($ty, $create_func, $try_func);
 
         // Unsigned type
         impl Encode for $uty {
+            #[inline]
             fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value> {
                 <$ty>::try_from(*self).map_or_else(
                     |_| {
@@ -69,6 +74,7 @@ macro_rules! impl_number_and_unsigned {
             }
         }
         impl Decode for $uty {
+            #[inline]
             fn decode<O: DynamicOps>(ops: &O, input: &O::Value) -> DataResult<Self> {
                 <$ty>::decode(ops, input).and_then(|i| {
                     <$uty>::try_from(i).map_or_else(
@@ -87,29 +93,33 @@ macro_rules! impl_number_and_unsigned {
     };
 }
 
-impl_number_and_unsigned!(i8, u8, byte);
-impl_number_and_unsigned!(i16, u16, short);
-impl_number_and_unsigned!(i32, u32, int);
-impl_number_and_unsigned!(i64, u64, long);
+impl_number_and_unsigned!(i8, u8, byte, try_byte);
+impl_number_and_unsigned!(i16, u16, short, try_short);
+impl_number_and_unsigned!(i32, u32, int, try_int);
+impl_number_and_unsigned!(i64, u64, long, try_long);
 
-impl_number!(f32, float);
-impl_number!(f64, double);
+impl_number!(f32, float, try_float);
+impl_number!(f64, double, try_double);
 
 impl Primitive for bool {
+    #[inline]
     fn primitive_encode<O: DynamicOps>(&self, ops: &O) -> O::Value {
         ops.bool(*self)
     }
 
+    #[inline]
     fn primitive_decode<O: DynamicOps>(ops: &O, input: &O::Value) -> DataResult<Self> {
         ops.try_bool(input)
     }
 }
 
 impl Primitive for String {
+    #[inline]
     fn primitive_encode<O: DynamicOps>(&self, ops: &O) -> O::Value {
         ops.string(self.clone())
     }
 
+    #[inline]
     fn primitive_decode<O: DynamicOps>(ops: &O, input: &O::Value) -> DataResult<Self> {
         ops.try_string(input)
     }

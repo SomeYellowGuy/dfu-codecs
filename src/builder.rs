@@ -18,6 +18,14 @@ pub struct DefaultListBuilder<'ops, O: DynamicOps> {
     list: DataResult<Vec<O::Value>>,
 }
 
+impl<'ops, O: DynamicOps> DefaultListBuilder<'ops, O> {
+    pub fn new(ops: &'ops O, capacity: usize) -> Self {
+        Self {
+            ops, list: DataResult::success(Vec::with_capacity(capacity))
+        }
+    }
+}
+
 impl<O: DynamicOps> ListBuilder for DefaultListBuilder<'_, O> {
     type Value = O::Value;
 
