@@ -10,6 +10,7 @@ use crate::{DataError, DataResult};
 
 pub use core::list::BoundedVec;
 pub use core::option::{OptionalFieldDecode, OptionalFieldEncode};
+pub use core::primitive::{ByteBuffer, IntStream, LongStream};
 
 use std::borrow::Cow;
 use thiserror::Error;

@@ -10,7 +10,6 @@ macro_rules! impl_try_list_wrapper {
             if self.data_type(input) != DataType::List {
                 // This check guarantees that the data type is a list, so we can
                 // safely return the result directly.
-                // TODO: Put unwrap error here
                 return self.try_list(input).map(|_| Vec::new());
             }
 

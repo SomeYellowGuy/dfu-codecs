@@ -1,24 +1,24 @@
 mod common;
-use serde_json::json;
-use criterion::criterion_main;
-use criterion::criterion_group;
 
-common_bench_functions!();
+use criterion::criterion_group;
+use criterion::criterion_main;
+use dfu_codecs::codec::LongStream;
+use serde_json::json;
 
 const TEST_STR: &str = "ABCDEabcde123#$";
 
-bench_encode_and_decode!(
-    number_benches | i32,
-    encode {
-        number_encode: 7
-    },
+bench_encode_and_decode_with_serde!(
+    number_benches,
+    i32,
+    encode { number_encode: 7 },
     decode {
         number_decode: json!(7)
     }
 );
 
-bench_encode_and_decode!(
-    string_benches | String,
+bench_encode_and_decode_with_serde!(
+    string_benches,
+    String,
     encode {
         string_encode: TEST_STR.to_string(),
     },
@@ -27,13 +27,25 @@ bench_encode_and_decode!(
     }
 );
 
-bench_encode_and_decode!(
-    boolean_benches | bool,
+bench_encode_and_decode_with_serde!(
+    boolean_benches,
+    bool,
     encode {
         boolean_encode: true,
     },
     decode {
-        boolean_decode: json!(1)
+        boolean_decode: json!(true)
+    }
+);
+
+bench_encode_and_decode!(
+    list_wrapper_benches,
+    LongStream,
+    encode {
+        list_wrapper_encode: vec![24134, -12349123, 287941234].into(),
+    },
+    decode {
+        list_wrapper_decode: json!([24134, -12349123, 287941234])
     }
 );
 
@@ -41,4 +53,5 @@ criterion_main!(
     number_benches,
     string_benches,
     boolean_benches,
+    list_wrapper_benches,
 );

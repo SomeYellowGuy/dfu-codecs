@@ -7,17 +7,17 @@ pub struct BoundedVec<T, const MIN: usize, const MAX: usize>(pub Vec<T>);
 type UnboundedVec<T> = BoundedVec<T, 0, { usize::MAX }>;
 
 impl<T, const MIN: usize, const MAX: usize> BoundedVec<T, MIN, MAX> {
-    fn too_short_error(vec: &[T]) -> BuiltInError {
+    fn too_short_error(size: usize) -> BuiltInError {
         BuiltInError::TooShortList {
-            size: vec.len(),
+            size,
             min_size: MIN,
             max_size: MAX,
         }
     }
 
-    fn too_long_error(vec: &[T]) -> BuiltInError {
+    fn too_long_error(size: usize) -> BuiltInError {
         BuiltInError::TooLongList {
-            size: vec.len(),
+            size,
             min_size: MIN,
             max_size: MAX,
         }
@@ -30,10 +30,10 @@ fn encode<T: Encode, O: DynamicOps, const MIN: usize, const MAX: usize>(
     prefix: O::Value,
 ) -> DataResult<O::Value> {
     if vec.len() < MIN {
-        return DataResult::error(BoundedVec::<T, MIN, MAX>::too_short_error(vec));
+        return DataResult::error(BoundedVec::<T, MIN, MAX>::too_short_error(vec.len()));
     }
     if vec.len() > MAX {
-        return DataResult::error(BoundedVec::<T, MIN, MAX>::too_long_error(vec));
+        return DataResult::error(BoundedVec::<T, MIN, MAX>::too_long_error(vec.len()));
     }
     let mut builder = ops.list_builder();
     for element in vec {
@@ -53,11 +53,21 @@ impl<T: Decode, const MIN: usize, const MAX: usize> Decode for BoundedVec<T, MIN
         ops.try_list(input)
             .with_lifecycle(Lifecycle::Stable)
             .and_then(|l| {
+                // Optimization: Check for l being too short before doing anything.
+                // Unlike DFU, we don't return a "remaining" value for Decode, so we don't need to collect
+                // failed entries.
+                if l.len() < MIN {
+                    return DataResult::error(Self::too_short_error(l.len()));
+                }
                 let mut result = DataResult::success_with_lifecycle((), Lifecycle::Stable);
                 let mut elements = Vec::with_capacity(l.len());
+                let mut total_count = 0;
                 for element in l {
+                    total_count += 1;
                     if elements.len() >= MAX {
-                        break;
+                        return DataResult::error(BoundedVec::<T, MIN, MAX>::too_long_error(
+                            total_count,
+                        ));
                     }
                     let element_result = T::decode(ops, element);
                     result = DataResult::apply_2_stable(
@@ -67,7 +77,7 @@ impl<T: Decode, const MIN: usize, const MAX: usize> Decode for BoundedVec<T, MIN
                     )
                 }
                 if elements.len() < MIN {
-                    return DataResult::error(Self::too_short_error(&elements));
+                    return DataResult::error(Self::too_short_error(total_count));
                 }
                 let decoded = BoundedVec(elements);
 

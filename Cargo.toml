@@ -27,3 +27,12 @@ serde = { version = "1.0.229", features = ["derive"] }
 [[bench]]
 name = "primitives"
 harness = false
+[[bench]]
+name = "structs"
+harness = false
+[[bench]]
+name = "list"
+harness = false
+[[bench]]
+name = "map"
+harness = false
