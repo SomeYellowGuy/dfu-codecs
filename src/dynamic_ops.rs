@@ -13,14 +13,15 @@ macro_rules! impl_try_list_wrapper {
                 // TODO: Put unwrap error here
                 return self.try_list(input).map(|_| Vec::new());
             }
-            let possible_input_error =
-                format!(concat!("Some elements are not ", $type_name, ": {}"), input);
 
             self.try_list(input).and_then(|l| {
-                let mut array = Vec::new();
+                let mut array = Vec::with_capacity(l.len());
                 for n in l {
                     let Some(n) = self.try_number(&n).into_success() else {
-                        return DataResult::error(possible_input_error);
+                        return DataResult::error(BuiltInError::SomeElementsAreDifferent(
+                            $type_name,
+                            input.to_string().into(),
+                        ));
                     };
                     array.push(<$ty>::from(n));
                 }

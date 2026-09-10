@@ -54,7 +54,7 @@ impl<T: Decode, const MIN: usize, const MAX: usize> Decode for BoundedVec<T, MIN
             .with_lifecycle(Lifecycle::Stable)
             .and_then(|l| {
                 let mut result = DataResult::success_with_lifecycle((), Lifecycle::Stable);
-                let mut elements = Vec::new();
+                let mut elements = Vec::with_capacity(l.len());
                 for element in l {
                     if elements.len() >= MAX {
                         break;
