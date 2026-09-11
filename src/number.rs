@@ -97,6 +97,7 @@ impl Display for Number {
 
 #[cfg(feature = "json")]
 impl From<Number> for serde_json::Value {
+    #[inline]
     fn from(num: Number) -> Self {
         match num {
             Number::Byte(n) => n.into(),
@@ -111,6 +112,7 @@ impl From<Number> for serde_json::Value {
 
 #[cfg(feature = "json")]
 impl From<serde_json::Number> for Number {
+    #[inline]
     fn from(num: serde_json::Number) -> Self {
         match num {
             n if n.is_i64() => Self::Long(n.as_i64().unwrap()),
