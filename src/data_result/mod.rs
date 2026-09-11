@@ -4,8 +4,6 @@ mod traits;
 
 use crate::lifecycle::Lifecycle;
 pub use error::{DataError, ErrorMessage};
-use smallvec::SmallVec;
-pub use smallvec::smallvec;
 use std::fmt::Debug;
 pub use traits::{DataTryFrom, DataTryInto};
 
@@ -36,57 +34,59 @@ pub enum DataResultStatus<R> {
 #[derive(Debug)]
 pub enum DataResultKind<R> {
     Success(R),
-    Error {
-        partial: Option<R>,
-        error: DataError,
-    },
+    Partial { value: R, error: DataError },
+    Failed(DataError),
 }
 
 impl<R> DataResult<R> {
+    #[inline]
     fn new(kind: DataResultKind<R>, lifecycle: Lifecycle) -> Self {
         Self { kind, lifecycle }
     }
 
     /// Creates a new *success* data result with the default lifecycle.
+    #[inline]
     pub fn success(success: R) -> Self {
         Self::success_with_lifecycle(success, Lifecycle::Experimental)
     }
 
     /// Creates a new *success* data result with the provided lifecycle.
+    #[inline]
     pub fn success_with_lifecycle(success: R, lifecycle: Lifecycle) -> Self {
         Self::new(DataResultKind::Success(success), lifecycle)
     }
 
     /// Creates a new *failed* data result with the provided error and the default lifecycle.
+    #[inline]
     pub fn error(message: impl Into<ErrorMessage>) -> Self {
         Self::error_with_lifecycle(message, Lifecycle::Experimental)
     }
 
     /// Creates a new *failed* data result with the provided error and lifecycle.
+    #[inline]
     pub fn error_with_lifecycle(message: impl Into<ErrorMessage>, lifecycle: Lifecycle) -> Self {
         Self::new(
-            DataResultKind::Error {
-                partial: None,
-                error: DataError::new(message.into()),
-            },
+            DataResultKind::Failed(DataError::new(message.into())),
             lifecycle,
         )
     }
 
     /// Creates a new *partial* data result with the provided error and the default lifecycle.
+    #[inline]
     pub fn partial(value: R, message: impl Into<ErrorMessage>) -> Self {
         Self::partial_with_lifecycle(value, message, Lifecycle::Experimental)
     }
 
     /// Creates a new *partial* data result with the provided error and lifecycle.
+    #[inline]
     pub fn partial_with_lifecycle(
         value: R,
         message: impl Into<ErrorMessage>,
         lifecycle: Lifecycle,
     ) -> Self {
         Self::new(
-            DataResultKind::Error {
-                partial: Some(value),
+            DataResultKind::Partial {
+                value,
                 error: DataError::new(message.into()),
             },
             lifecycle,
@@ -94,49 +94,52 @@ impl<R> DataResult<R> {
     }
 
     /// Adds the given lifecycle to that of this result.
+    #[inline]
     pub fn add_lifecycle(mut self, lifecycle: Lifecycle) -> Self {
         self.lifecycle += lifecycle;
         self
     }
 
     /// Replaces the lifecycle of this result with lifecycle.
+    #[inline]
     pub fn with_lifecycle(mut self, lifecycle: Lifecycle) -> Self {
         self.lifecycle = lifecycle;
         self
     }
 
     /// Replaces the partial value of the result (if it is an error one) with `value`.
+    #[inline]
     pub fn with_partial(mut self, value: R) -> Self {
-        if let DataResultKind::Error { partial, .. } = &mut self.kind {
-            *partial = Some(value);
+        if let DataResultKind::Partial { error, .. } | DataResultKind::Failed(error) = self.kind {
+            self.kind = DataResultKind::Partial { value, error }
         }
         self
     }
 
     /// Returns whether this result is a success result.
+    #[inline]
     pub fn is_success(&self) -> bool {
         matches!(self.kind, DataResultKind::Success(_))
     }
 
     /// Returns whether this result is a success or partial result.
+    #[inline]
     pub fn is_success_or_partial(&self) -> bool {
         matches!(
             self.kind,
-            DataResultKind::Success(_)
-                | DataResultKind::Error {
-                    partial: Some(_),
-                    ..
-                }
+            DataResultKind::Success(_) | DataResultKind::Partial { .. }
         )
     }
 
     /// Returns whether this result is an error (partial or failed) result.
+    #[inline]
     pub fn is_error(&self) -> bool {
         !self.is_success()
     }
 
     /// Consumes this result, returning its value wrapped in a `Some` if it is a success. Otherwise,
     /// this returns `None`.
+    #[inline]
     pub fn into_success(self) -> Option<R> {
         match self.kind {
             DataResultKind::Success(success) => Some(success),
@@ -146,15 +149,18 @@ impl<R> DataResult<R> {
 
     /// Consumes this result, returning its value wrapped in a `Some` if it is a success or partial. Otherwise,
     /// this returns `None`.
+    #[inline]
     pub fn into_success_or_partial(self) -> Option<R> {
         match self.kind {
             DataResultKind::Success(success) => Some(success),
-            DataResultKind::Error { partial, .. } => partial,
+            DataResultKind::Partial { value, .. } => Some(value),
+            _ => None,
         }
     }
 
     /// Consumes this result, returning the reference to its value wrapped in a `Some` if it is a success.
     /// Otherwise, this returns `None`.
+    #[inline]
     pub fn success_ref(&self) -> Option<&R> {
         match &self.kind {
             DataResultKind::Success(success) => Some(success),
@@ -164,55 +170,42 @@ impl<R> DataResult<R> {
 
     /// Otherwise, this returns `None`.
     /// Consumes this result, returning the reference to its value wrapped in a `Some` if it is a success or partial.
+    #[inline]
     pub fn success_or_partial_ref(&self) -> Option<&R> {
         match &self.kind {
             DataResultKind::Success(success) => Some(success),
-            DataResultKind::Error { partial, .. } => partial.as_ref(),
+            DataResultKind::Partial { value, .. } => Some(value),
+            _ => None,
         }
     }
 
     /// Extracts the value (if any) of the result, leaving behind a data result of the unit tuple `()`
     /// that keeps all other info (errors and lifecycle) that was present on this result.
+    #[inline]
     pub fn extract(self) -> (Option<R>, DataResult<()>) {
         match self.kind {
             DataResultKind::Success(r) => (
                 Some(r),
                 DataResult::new(DataResultKind::Success(()), self.lifecycle),
             ),
-            DataResultKind::Error { partial, error } => {
-                let new_partial = partial.as_ref().map(|_| ());
-                (
-                    partial,
-                    DataResult::new(
-                        DataResultKind::Error {
-                            partial: new_partial,
-                            error,
-                        },
-                        self.lifecycle,
-                    ),
-                )
-            }
+            DataResultKind::Partial { value, error } => (
+                Some(value),
+                DataResult::new(DataResultKind::Partial { value: (), error }, self.lifecycle),
+            ),
+            DataResultKind::Failed(error) => (
+                None,
+                DataResult::new(DataResultKind::Failed(error), self.lifecycle),
+            ),
         }
     }
 
     /// Converts this result to a [`DataResultStatus`].
+    #[inline]
     pub fn status(self) -> DataResultStatus<R> {
-        match self {
-            Self {
-                kind: DataResultKind::Success(r),
-                ..
-            } => DataResultStatus::Success(r),
-            Self {
-                kind:
-                    DataResultKind::Error {
-                        partial: Some(r), ..
-                    },
-                ..
-            } => DataResultStatus::Partial(r),
-            Self {
-                kind: DataResultKind::Error { partial: None, .. },
-                ..
-            } => DataResultStatus::Failed,
+        match self.kind {
+            DataResultKind::Success(value) => DataResultStatus::Success(value),
+            DataResultKind::Partial { value, .. } => DataResultStatus::Partial(value),
+            DataResultKind::Failed(_) => DataResultStatus::Failed,
         }
     }
 
@@ -221,6 +214,7 @@ impl<R> DataResult<R> {
     /// # Panics
     ///
     /// Panics if the self value is an error (partial or failed result).
+    #[inline]
     pub fn unwrap(self) -> R {
         self.into_success().expect("DataResult should be a success")
     }
@@ -230,6 +224,7 @@ impl<R> DataResult<R> {
     /// # Panics
     ///
     /// Panics if the self value is a failed result.
+    #[inline]
     pub fn unwrap_or_partial(self) -> R {
         self.into_success_or_partial()
             .expect("DataResult should be a success or partial")
@@ -237,10 +232,12 @@ impl<R> DataResult<R> {
 
     /// Separates the value of this result (if any), returning it, along with adding
     /// its errors to `vec`.
+    #[inline]
     pub fn separate(self, vec: &mut DataError) -> Option<R> {
         let (value, error) = match self.kind {
-            DataResultKind::Success(success) => (Some(success), None),
-            DataResultKind::Error { partial, error } => (partial, Some(error)),
+            DataResultKind::Success(value) => (Some(value), None),
+            DataResultKind::Partial { value, error } => (Some(value), Some(error)),
+            DataResultKind::Failed(error) => (None, Some(error)),
         };
         if let Some(error) = error {
             vec.append(error)
@@ -249,28 +246,24 @@ impl<R> DataResult<R> {
     }
 
     /// Maps the value inside a success or partial result using `f`.
+    #[inline]
     pub fn map<T>(self, f: impl FnOnce(R) -> T) -> DataResult<T> {
         let kind = match self.kind {
             DataResultKind::Success(value) => DataResultKind::Success(f(value)),
 
-            DataResultKind::Error {
+            DataResultKind::Partial { value, error } => DataResultKind::Partial {
                 error,
-                partial: Some(value),
-            } => DataResultKind::Error {
-                error,
-                partial: Some(f(value)),
+                value: f(value),
             },
 
-            DataResultKind::Error { error, .. } => DataResultKind::Error {
-                error,
-                partial: None,
-            },
+            DataResultKind::Failed(error) => DataResultKind::Failed(error),
         };
         DataResult::new(kind, self.lifecycle)
     }
 
     /// Maps the value inside a success using `success_function` if this result is a success, or
     /// maps its error data and the partial value using `error_function`.
+    #[inline]
     pub fn map_or_else<T>(
         self,
         error_function: impl FnOnce(Option<R>, DataError) -> T,
@@ -278,13 +271,17 @@ impl<R> DataResult<R> {
     ) -> T {
         match self.kind {
             DataResultKind::Success(value) => success_function(value),
-            DataResultKind::Error { partial, error } => error_function(partial, error),
+            DataResultKind::Partial { value, error } => error_function(Some(value), error),
+            DataResultKind::Failed(error) => error_function(None, error),
         }
     }
 
     /// Calls `f` for the new message to add to this result if it is an error.
+    #[inline]
     pub fn add_message_if_error(mut self, f: impl FnOnce() -> ErrorMessage) -> Self {
-        if let DataResultKind::Error { error, .. } = &mut self.kind {
+        if let DataResultKind::Failed(error) | DataResultKind::Partial { error, .. } =
+            &mut self.kind
+        {
             error.push(f());
         }
         self
@@ -292,39 +289,35 @@ impl<R> DataResult<R> {
 
     /// Maps the value inside this result if it is a success or partial using `f`,
     /// combining the value partiality (if any), errors and lifecycles of this and the result from `f`.
+    #[inline]
     pub fn and_then<T>(self, f: impl FnOnce(R) -> DataResult<T>) -> DataResult<T> {
         match self.kind {
             DataResultKind::Success(value) => f(value).add_lifecycle(self.lifecycle),
 
-            DataResultKind::Error {
-                mut error,
-                partial: Some(value),
-            } => {
+            DataResultKind::Partial { mut error, value } => {
                 let function_result = f(value);
                 let kind = match function_result.kind {
-                    DataResultKind::Success(value) => DataResultKind::Error {
-                        error,
-                        partial: Some(value),
-                    },
+                    DataResultKind::Success(value) => DataResultKind::Partial { error, value },
 
-                    DataResultKind::Error {
+                    DataResultKind::Partial {
                         error: next_error,
-                        partial,
+                        value,
                     } => {
                         error.append(next_error);
-                        DataResultKind::Error { partial, error }
+                        DataResultKind::Partial { value, error }
+                    }
+
+                    DataResultKind::Failed(next_error) => {
+                        error.append(next_error);
+                        DataResultKind::Failed(error)
                     }
                 };
                 DataResult::new(kind, self.lifecycle + function_result.lifecycle)
             }
 
-            DataResultKind::Error { error, .. } => DataResult::new(
-                DataResultKind::Error {
-                    partial: None,
-                    error,
-                },
-                self.lifecycle,
-            ),
+            DataResultKind::Failed(error) => {
+                DataResult::new(DataResultKind::Failed(error), self.lifecycle)
+            }
         }
     }
 
@@ -333,6 +326,7 @@ impl<R> DataResult<R> {
     /// - If both results are successful, the returned one is also a success.
     /// - If at least one of the results is not a success, and neither result is failed, the returned one is a partial.
     /// - Otherwise, the returned one is a failed result.
+    #[inline]
     pub fn apply_2<A, B>(
         f: impl FnOnce(A, B) -> R,
         a: DataResult<A>,
@@ -346,19 +340,19 @@ impl<R> DataResult<R> {
             );
         }
 
-        let mut error = DataError(SmallVec::new());
+        let mut error = DataError(Vec::new());
         let a = a.separate(&mut error);
         let b = b.separate(&mut error);
 
-        let partial = match (a, b) {
-            (Some(a), Some(b)) => Some(f(a, b)),
-            _ => None,
+        let kind = match (a, b) {
+            (Some(a), Some(b)) => DataResultKind::Partial {
+                value: f(a, b),
+                error,
+            },
+            _ => DataResultKind::Failed(error),
         };
 
-        Self::new(
-            DataResultKind::Error { partial, error },
-            resultant_lifecycle,
-        )
+        Self::new(kind, resultant_lifecycle)
     }
 
     /// Combines the values inside 2 results, applying them in `f` if all results have values.
@@ -367,6 +361,7 @@ impl<R> DataResult<R> {
     /// - Otherwise, the returned one is a failed result.
     ///
     /// In addition to the above, the returned result is also marked as [`Lifecycle::Stable`].
+    #[inline]
     pub fn apply_2_stable<A, B>(
         f: impl FnOnce(A, B) -> R,
         a: DataResult<A>,
@@ -375,9 +370,10 @@ impl<R> DataResult<R> {
         Self::apply_2(f, a, b).with_lifecycle(Lifecycle::Stable)
     }
 
-    /// Replaces the data of this result with `value` (if this result is a success or partial).
+    /// Replaces the data of this result with `value`.
     ///
     /// This is equivalent to `result.map(_ -> value).setPartial(value)` in Java.
+    #[inline]
     pub fn with_data<T>(self, value: T) -> DataResult<T> {
         match self {
             DataResult {
@@ -385,21 +381,19 @@ impl<R> DataResult<R> {
                 lifecycle,
             } => DataResult::success_with_lifecycle(value, lifecycle),
             DataResult {
-                kind: DataResultKind::Error { error, .. },
+                kind: DataResultKind::Partial { error, .. } | DataResultKind::Failed(error),
                 lifecycle,
             } => DataResult {
-                kind: DataResultKind::Error {
-                    partial: Some(value),
-                    error,
-                },
+                kind: DataResultKind::Partial { value, error },
                 lifecycle,
             },
         }
     }
 
     /// Creates and returns the message of this result, which can be displayed anywhere needed.
+    #[inline]
     pub fn message(&self) -> Option<String> {
-        if let DataResultKind::Error { error, .. } = &self.kind {
+        if let DataResultKind::Partial { error, .. } | DataResultKind::Failed(error) = &self.kind {
             Some(error.to_string())
         } else {
             None
@@ -407,9 +401,11 @@ impl<R> DataResult<R> {
     }
 
     /// Consumes this result, returning its [`DataError`].
+    #[inline]
     pub fn data_error(self) -> Option<DataError> {
         match self.kind {
-            DataResultKind::Error { error, .. } => Some(error),
+            DataResultKind::Partial { error, .. } => Some(error),
+            DataResultKind::Failed(error) => Some(error),
             _ => None,
         }
     }
@@ -435,15 +431,18 @@ macro_rules! apply_data_results {
                 ), resultant_lifecycle);
             }
 
-            let mut error = DataError(smallvec![]);
+            let mut error = DataError(Vec::new());
             $( let $results = $results.separate(&mut error); )+
 
-            let partial = match ( $($results,)+ ) {
-                ( $(Some($results)),+ ) => Some(f( $( $results ),+ )),
-                _ => None,
+            let kind = match ( $($results,)+ ) {
+                ( $(Some($results)),+ ) => DataResultKind::Partial { value: f( $( $results ),+ ), error },
+                _ => DataResultKind::Failed(error),
             };
 
-            Self::new(DataResultKind::Error {partial, error}, resultant_lifecycle)
+            Self::new(
+                kind,
+                resultant_lifecycle,
+            )
         }
     };
 }

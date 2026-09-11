@@ -1,24 +1,26 @@
 use crate::codec::BuiltInError;
-use smallvec::{SmallVec, smallvec};
 use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter, Write};
 
-type InnerDataError = SmallVec<[ErrorMessage; 3]>;
+type InnerDataError = Vec<ErrorMessage>;
 
 /// A list of error messages.
 #[derive(Debug)]
 pub struct DataError(pub(crate) InnerDataError);
 
 impl DataError {
+    #[inline]
     pub fn new(message: ErrorMessage) -> Self {
-        Self(smallvec![message])
+        Self(vec![message])
     }
 
+    #[inline]
     pub fn push(&mut self, error: ErrorMessage) {
         self.0.push(error)
     }
 
+    #[inline]
     pub fn append(&mut self, mut other: DataError) {
         self.0.append(&mut other.0)
     }

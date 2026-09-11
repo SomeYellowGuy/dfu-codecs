@@ -77,13 +77,20 @@ where
                 lifecycle,
             },
             DataResult {
-                kind: DataResultKind::Error { partial, error },
+                kind: DataResultKind::Partial { value, error },
                 lifecycle,
             } => DataResult {
-                kind: DataResultKind::Error {
-                    partial: partial.map(Some),
+                kind: DataResultKind::Partial {
+                    value: Some(value),
                     error,
                 },
+                lifecycle,
+            },
+            DataResult {
+                kind: DataResultKind::Failed(error),
+                lifecycle,
+            } => DataResult {
+                kind: DataResultKind::Failed(error),
                 lifecycle,
             },
         }
