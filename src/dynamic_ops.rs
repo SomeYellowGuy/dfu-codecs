@@ -117,7 +117,7 @@ pub trait DynamicOps: Sized + 'static {
     }
     fn map_builder(&self) -> impl RecordBuilder<Value = Self::Value>;
 
-    #[inline]
+    #[inline(always)]
     fn merge_to_primitive(
         &self,
         prefix: Self::Value,

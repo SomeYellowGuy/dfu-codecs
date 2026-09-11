@@ -21,6 +21,7 @@ pub trait Encode {
     fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value>;
 
     /// Encodes this value to a value represented by the provided [`DynamicOps`] without a prefix.
+    #[inline]
     fn encode_start<O: DynamicOps>(&self, ops: &O) -> DataResult<O::Value> {
         self.encode(ops, ops.empty())
     }
@@ -28,6 +29,7 @@ pub trait Encode {
     /// Encodes this value to a map by adding a field, whose:
     /// - key is the field's `name`.
     /// - value is the encoded value represented by the provided [`DynamicOps`].
+    #[inline]
     fn encode_field<O: DynamicOps, B: RecordBuilder<Value = O::Value>>(
         &self,
         prefix: B,
@@ -42,6 +44,7 @@ pub trait Encode {
     /// - value is the encoded value represented by the provided [`DynamicOps`].
     ///
     /// The field may not be encoded if `default` == `*self`.
+    #[inline]
     fn encode_defaulted_field<O: DynamicOps, B: RecordBuilder<Value = O::Value>>(
         &self,
         prefix: B,
@@ -61,12 +64,14 @@ pub trait Encode {
 }
 
 impl<T: Encode> Encode for &T {
+    #[inline]
     fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value> {
         T::encode(*self, ops, prefix)
     }
 }
 
 impl<T: Encode> Encode for Box<T> {
+    #[inline]
     fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value> {
         T::encode(self, ops, prefix)
     }
@@ -80,6 +85,7 @@ pub trait Decode: Sized {
     /// Decodes a value of this type from a map by decoding one of its fields, whose:
     /// - key is the field's `name`.
     /// - value is the value represented by a [`DynamicsOps`] that is meant to be decoded.
+    #[inline]
     fn decode_field<O: DynamicOps>(
         input: &impl MapLike<Value = O::Value>,
         ops: &O,
@@ -99,6 +105,7 @@ pub trait Decode: Sized {
     ///
     /// This method has an extra `lenient` parameter. If it is `true`, errors
     /// while trying to decode an explicit value are *ignored*, decoding the default instead.
+    #[inline]
     fn decode_defaulted_field<O: DynamicOps>(
         input: &mut impl MapLike<Value = O::Value>,
         ops: &O,
@@ -112,6 +119,7 @@ pub trait Decode: Sized {
 }
 
 impl<T: Decode> Decode for Box<T> {
+    #[inline]
     fn decode<O: DynamicOps>(ops: &O, input: &O::Value) -> DataResult<Self> {
         T::decode(ops, input).map(Box::new)
     }
@@ -145,6 +153,7 @@ pub trait MapDecode: Sized {
 macro_rules! encode_from_map_encode {
     ($ty:ty) => {
         impl $crate::codec::Encode for $ty {
+            #[inline]
             fn encode<O: $crate::DynamicOps>(
                 &self,
                 ops: &O,
@@ -162,6 +171,7 @@ macro_rules! encode_from_map_encode {
 macro_rules! decode_from_map_decode {
     ($ty:ty) => {
         impl $crate::codec::Decode for $ty {
+            #[inline]
             fn decode<O: $crate::DynamicOps>(
                 ops: &O,
                 input: &O::Value,

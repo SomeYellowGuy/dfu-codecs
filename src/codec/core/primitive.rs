@@ -23,6 +23,11 @@ macro_rules! primitive_blanket_impl {
                 fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value> {
                     ops.merge_to_primitive(prefix, self.primitive_encode(ops))
                 }
+
+                #[inline]
+                fn encode_start<O: DynamicOps>(&self, ops: &O) -> DataResult<O::Value> {
+                    DataResult::success(self.primitive_encode(ops))
+                }
             }
 
             impl Decode for $ty {
