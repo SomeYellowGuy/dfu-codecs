@@ -3,7 +3,7 @@ use crate::{DataResult, DynamicOps};
 use either::Either;
 
 impl<L: Encode, R: Encode> Encode for Either<L, R> {
-    fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value> {
+    fn encode<O: DynamicOps>(&self, ops: &O, prefix: Option<O::Value>) -> DataResult<O::Value> {
         match self {
             Self::Left(l) => l.encode(ops, prefix),
             Self::Right(r) => r.encode(ops, prefix),

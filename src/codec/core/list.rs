@@ -27,7 +27,7 @@ impl<T, const MIN: usize, const MAX: usize> BoundedVec<T, MIN, MAX> {
 fn encode<T: Encode, O: DynamicOps, const MIN: usize, const MAX: usize>(
     vec: &[T],
     ops: &O,
-    prefix: O::Value,
+    prefix: Option<O::Value>,
 ) -> DataResult<O::Value> {
     if vec.len() < MIN {
         return DataResult::error(BoundedVec::<T, MIN, MAX>::too_short_error(vec.len()));
@@ -43,7 +43,7 @@ fn encode<T: Encode, O: DynamicOps, const MIN: usize, const MAX: usize>(
 }
 
 impl<T: Encode, const MIN: usize, const MAX: usize> Encode for BoundedVec<T, MIN, MAX> {
-    fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value> {
+    fn encode<O: DynamicOps>(&self, ops: &O, prefix: Option<O::Value>) -> DataResult<O::Value> {
         encode::<T, O, MIN, MAX>(&self.0, ops, prefix)
     }
 }
@@ -99,7 +99,7 @@ impl<T, const MIN: usize, const MAX: usize> From<BoundedVec<T, MIN, MAX>> for Ve
 }
 
 impl<T: Encode> Encode for Vec<T> {
-    fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value> {
+    fn encode<O: DynamicOps>(&self, ops: &O, prefix: Option<O::Value>) -> DataResult<O::Value> {
         encode::<T, O, 0, { usize::MAX }>(self, ops, prefix)
     }
 }
@@ -111,7 +111,7 @@ impl<T: Decode> Decode for Vec<T> {
 }
 
 impl<T: Clone + Encode, const N: usize> Encode for [T; N] {
-    fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value> {
+    fn encode<O: DynamicOps>(&self, ops: &O, prefix: Option<O::Value>) -> DataResult<O::Value> {
         self.to_vec().encode(ops, prefix)
     }
 }

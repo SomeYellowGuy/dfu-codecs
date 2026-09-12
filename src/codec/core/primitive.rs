@@ -20,13 +20,8 @@ macro_rules! primitive_blanket_impl {
         $(
             impl Encode for $ty {
                 #[inline]
-                fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value> {
+                fn encode<O: DynamicOps>(&self, ops: &O, prefix: Option<O::Value>) -> DataResult<O::Value> {
                     ops.merge_to_primitive(prefix, self.primitive_encode(ops))
-                }
-
-                #[inline]
-                fn encode_start<O: DynamicOps>(&self, ops: &O) -> DataResult<O::Value> {
-                    DataResult::success(self.primitive_encode(ops))
                 }
             }
 
@@ -65,7 +60,7 @@ macro_rules! impl_number_and_unsigned {
         // Unsigned type
         impl Encode for $uty {
             #[inline]
-            fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value> {
+            fn encode<O: DynamicOps>(&self, ops: &O, prefix: Option<O::Value>) -> DataResult<O::Value> {
                 <$ty>::try_from(*self).map_or_else(
                     |_| {
                         DataResult::error(BuiltInError::CouldNotFit(

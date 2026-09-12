@@ -64,11 +64,6 @@ impl DynamicOps for JsonOps {
     type Value = Value;
 
     #[inline]
-    fn empty(&self) -> Self::Value {
-        Value::Null
-    }
-
-    #[inline]
     fn empty_list(&self) -> Self::Value {
         Value::Array(Vec::new())
     }
@@ -181,14 +176,25 @@ impl DynamicOps for JsonOps {
     }
 
     #[inline]
-    fn merge_to_list(&self, list: Self::Value, value: Self::Value) -> DataResult<Self::Value> {
+    fn merge_to_list(&self, list: Option<Self::Value>, value: Self::Value) -> DataResult<Self::Value> {
         match list {
-            Value::Null => DataResult::success(Value::Array(vec![value])),
-            Value::Array(mut vec) => {
+            None | Some(Value::Null) => DataResult::success(Value::Array(vec![value])),
+            Some(Value::Array(mut vec)) => {
                 vec.push(value);
                 DataResult::success(Value::Array(vec))
             }
-            _ => DataResult::error(JsonOpsError::MergeCalledWithNoList(list.to_string().into())),
+            Some(list) => DataResult::error(JsonOpsError::MergeCalledWithNoList(list.to_string().into())),
+        }
+    }
+
+    fn merge_values_to_list(&self, list: Option<Self::Value>, values: impl IntoIterator<Item=Self::Value>) -> DataResult<Self::Value> {
+        match list {
+            None | Some(Value::Null) => DataResult::success(Value::Array(values.into_iter().collect())),
+            Some(Value::Array(mut vec)) => {
+                vec.extend(values);
+                DataResult::success(Value::Array(vec))
+            }
+            Some(list) => DataResult::partial(JsonOpsError::MergeCalledWithNoList(list.to_string().into()), list),
         }
     }
 }
@@ -228,19 +234,19 @@ impl ListBuilder for ArrayBuilder {
     }
 
     #[inline]
-    fn build(self, prefix: Self::Value) -> DataResult<Self::Value> {
+    fn build(self, prefix: Option<Self::Value>) -> DataResult<Self::Value> {
         self.0.and_then(|v| {
             let built = match prefix {
-                Value::Null => v,
-                Value::Array(mut prefix_vec) => {
+                None | Some(Value::Null) => v,
+                Some(Value::Array(mut prefix_vec)) => {
                     prefix_vec.extend(v);
                     prefix_vec
                 }
-                _ => {
+                Some(prefix) => {
                     let prefix_string = prefix.to_string().into();
                     return DataResult::partial(
-                        prefix,
                         JsonOpsError::CannotAppendListToNotList(prefix_string),
+                        prefix,
                     );
                 }
             };
@@ -267,17 +273,14 @@ impl ObjectBuilder {
     }
 
     #[inline]
-    fn final_build(builder: Map<String, Value>, prefix: Value) -> DataResult<Value> {
+    fn final_build(builder: Map<String, Value>, prefix: Option<Value>) -> DataResult<Value> {
         match prefix {
-            Value::Null => DataResult::success(Value::Object(builder)),
-            Value::Object(mut map) => {
+            None | Some(Value::Null) => DataResult::success(Value::Object(builder)),
+            Some(Value::Object(mut map)) => {
                 map.extend(builder);
                 DataResult::success(Value::Object(map))
             }
-            _ => {
-                let string_prefix = prefix.to_string().into();
-                DataResult::partial(prefix, JsonOpsError::CannotAppendMapToNotMap(string_prefix))
-            }
+            Some(prefix) => DataResult::partial(JsonOpsError::CannotAppendMapToNotMap(prefix.to_string().into()), prefix)
         }
     }
 }
@@ -298,7 +301,7 @@ impl RecordBuilder for ObjectBuilder {
     }
 
     #[inline]
-    fn build(self, prefix: Self::Value) -> DataResult<Self::Value> {
+    fn build(self, prefix: Option<Self::Value>) -> DataResult<Self::Value> {
         self.0.and_then(|b| Self::final_build(b, prefix))
     }
 }

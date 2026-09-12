@@ -1,6 +1,6 @@
 use crate::codec::{BuiltInError, Decode, Encode};
 use crate::data_result::{DataResult, ErrorMessage};
-use crate::{DynamicOps, Lifecycle, MapLike, RecordBuilder};
+use crate::{DataTryFrom, DynamicOps, Lifecycle, MapLike, RecordBuilder};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::fmt::Display;
@@ -27,7 +27,7 @@ fn base_map_decode<O, K, V>(
 where
     O: DynamicOps,
     O::Value: Clone,
-    K: Decode + Eq + Hash + Display,
+    K: DataTryFrom<String> + Eq + Hash + Display,
     V: Decode,
 {
     let mut elements = HashMap::new();
@@ -36,7 +36,7 @@ where
     let result = input.entries().fold(
         DataResult::success_with_lifecycle((), Lifecycle::Stable),
         |r, (key, value)| {
-            let key_result = K::decode(ops, &ops.string(key.to_owned()));
+            let key_result = K::data_try_from(key.to_string());
             let value_result = V::decode(ops, value);
 
             let pair = DataResult::apply_2_stable(|k, v| (k, v), key_result, value_result);
@@ -80,14 +80,14 @@ where
     for<'a> &'a K: Into<String>,
     V: Encode,
 {
-    fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value> {
+    fn encode<O: DynamicOps>(&self, ops: &O, prefix: Option<O::Value>) -> DataResult<O::Value> {
         base_map_encode(ops.map_builder(), ops, self).build(prefix)
     }
 }
 
 impl<K, V> Decode for HashMap<K, V>
 where
-    K: Decode + Eq + Hash + Display,
+    K: DataTryFrom<String> + Eq + Hash + Display,
     V: Decode,
 {
     fn decode<O: DynamicOps>(ops: &O, input: &O::Value) -> DataResult<Self> {

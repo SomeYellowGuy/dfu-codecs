@@ -15,6 +15,6 @@ pub use dynamic_ops::{DataType, DynamicOps, MapLike};
 pub use lifecycle::Lifecycle;
 pub use number::Number;
 
-// For
+// For JSON support.
 #[cfg(feature = "json")]
 pub use json_ops::JsonOps;

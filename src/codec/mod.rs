@@ -18,12 +18,12 @@ use thiserror::Error;
 /// A trait for something that can be encoded by a [`DynamicOps`] to its format.
 pub trait Encode {
     /// Encodes this value to a value represented by the provided [`DynamicOps`] with the given prefix.
-    fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value>;
+    fn encode<O: DynamicOps>(&self, ops: &O, prefix: Option<O::Value>) -> DataResult<O::Value>;
 
     /// Encodes this value to a value represented by the provided [`DynamicOps`] without a prefix.
     #[inline]
     fn encode_start<O: DynamicOps>(&self, ops: &O) -> DataResult<O::Value> {
-        self.encode(ops, ops.empty())
+        self.encode(ops, None)
     }
 
     /// Encodes this value to a map by adding a field, whose:
@@ -65,14 +65,14 @@ pub trait Encode {
 
 impl<T: Encode> Encode for &T {
     #[inline]
-    fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value> {
+    fn encode<O: DynamicOps>(&self, ops: &O, prefix: Option<O::Value>) -> DataResult<O::Value> {
         T::encode(*self, ops, prefix)
     }
 }
 
 impl<T: Encode> Encode for Box<T> {
     #[inline]
-    fn encode<O: DynamicOps>(&self, ops: &O, prefix: O::Value) -> DataResult<O::Value> {
+    fn encode<O: DynamicOps>(&self, ops: &O, prefix: Option<O::Value>) -> DataResult<O::Value> {
         T::encode(self, ops, prefix)
     }
 }
@@ -157,7 +157,7 @@ macro_rules! encode_from_map_encode {
             fn encode<O: $crate::DynamicOps>(
                 &self,
                 ops: &O,
-                prefix: O::Value,
+                prefix: Option<O::Value>,
             ) -> $crate::DataResult<O::Value> {
                 <$ty as $crate::codec::MapEncode>::map_encode(self, ops, ops.map_builder())
                     .build(prefix)

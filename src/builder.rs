@@ -10,7 +10,7 @@ pub trait ListBuilder: Sized {
 
     fn add_result(self, value: DataResult<Self::Value>) -> Self;
 
-    fn build(self, prefix: Self::Value) -> DataResult<Self::Value>;
+    fn build(self, prefix: Option<Self::Value>) -> DataResult<Self::Value>;
 }
 
 pub struct DefaultListBuilder<'ops, O: DynamicOps> {
@@ -50,7 +50,7 @@ impl<O: DynamicOps> ListBuilder for DefaultListBuilder<'_, O> {
         self
     }
 
-    fn build(self, prefix: Self::Value) -> DataResult<Self::Value> {
+    fn build(self, prefix: Option<Self::Value>) -> DataResult<Self::Value> {
         self.list
             .and_then(|v| self.ops.merge_values_to_list(prefix, v))
     }
@@ -81,5 +81,5 @@ pub trait RecordBuilder: Sized {
         value.encode_optional_field(self, ops, key)
     }
 
-    fn build(self, prefix: Self::Value) -> DataResult<Self::Value>;
+    fn build(self, prefix: Option<Self::Value>) -> DataResult<Self::Value>;
 }

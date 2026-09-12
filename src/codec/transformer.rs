@@ -8,7 +8,7 @@ macro_rules! encode_impl {
             fn encode<O: $crate::DynamicOps>(
                 &self,
                 ops: &O,
-                prefix: O::Value,
+                prefix: Option<O::Value>,
             ) -> $crate::DataResult<O::Value> {
                 <$first_type as $crate::codec::Encode>::encode(&$backward(self), ops, prefix)
             }
@@ -20,7 +20,7 @@ macro_rules! encode_impl {
             fn encode<O: $crate::DynamicOps>(
                 &self,
                 ops: &O,
-                prefix: O::Value,
+                prefix: Option<O::Value>,
             ) -> $crate::DataResult<O::Value> {
                 $backward(self)
                     .and_then(|m| <$second_type as $crate::codec::Encode>::encode(&m, ops, prefix))

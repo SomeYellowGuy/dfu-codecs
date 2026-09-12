@@ -44,13 +44,13 @@ impl<R> DataResult<R> {
         Self { kind, lifecycle }
     }
 
-    /// Creates a new *success* data result with the default lifecycle.
+    /// Creates a new *successful* data result with the default lifecycle.
     #[inline]
     pub fn success(success: R) -> Self {
         Self::success_with_lifecycle(success, Lifecycle::Experimental)
     }
 
-    /// Creates a new *success* data result with the provided lifecycle.
+    /// Creates a new *successful* data result with the provided lifecycle.
     #[inline]
     pub fn success_with_lifecycle(success: R, lifecycle: Lifecycle) -> Self {
         Self::new(DataResultKind::Success(success), lifecycle)
@@ -73,15 +73,15 @@ impl<R> DataResult<R> {
 
     /// Creates a new *partial* data result with the provided error and the default lifecycle.
     #[inline]
-    pub fn partial(value: R, message: impl Into<ErrorMessage>) -> Self {
-        Self::partial_with_lifecycle(value, message, Lifecycle::Experimental)
+    pub fn partial(message: impl Into<ErrorMessage>, value: R) -> Self {
+        Self::partial_with_lifecycle(message, value, Lifecycle::Experimental)
     }
 
     /// Creates a new *partial* data result with the provided error and lifecycle.
     #[inline]
     pub fn partial_with_lifecycle(
-        value: R,
         message: impl Into<ErrorMessage>,
+        value: R,
         lifecycle: Lifecycle,
     ) -> Self {
         Self::new(
@@ -323,7 +323,7 @@ impl<R> DataResult<R> {
 
     /// Combines the values inside 2 results, applying them in `f` if all results have values.
     ///
-    /// - If both results are successful, the returned one is also a success.
+    /// - If both results are successes, the returned one is also a success.
     /// - If at least one of the results is not a success, and neither result is failed, the returned one is a partial.
     /// - Otherwise, the returned one is a failed result.
     #[inline]
@@ -356,8 +356,8 @@ impl<R> DataResult<R> {
     }
 
     /// Combines the values inside 2 results, applying them in `f` if all results have values.
-    /// - If all results are successful, the returned one is also a success.
-    /// - If not all results are successful, and no results are failed, the returned one is a partial.
+    /// - If all results are successes, the returned one is also a success.
+    /// - If not all results are successes, and no results are failed, the returned one is a partial.
     /// - Otherwise, the returned one is a failed result.
     ///
     /// In addition to the above, the returned result is also marked as [`Lifecycle::Stable`].
@@ -416,7 +416,7 @@ macro_rules! apply_data_results {
     ($vis:vis $name:ident | $count:literal | $($generic:ident $results:ident),+) => {
         #[doc = concat!(
             "Combines the values inside ", $count, " results, applying them in `f` if all results have values.\n\n",
-            " - If all results are successful, the returned one is also a success.\n",
+            " - If all results are successes, the returned one is also a success.\n",
             " - If not all results are a success, and no results are failed, the returned one is a partial.\n",
             " - Otherwise, the returned one is a failed result."
         )]

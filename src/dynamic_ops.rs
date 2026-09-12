@@ -34,8 +34,7 @@ macro_rules! impl_try_list_wrapper {
 /// The `Value` of this trait is the type that can be used to represent anything in this format.
 pub trait DynamicOps: Sized + 'static {
     type Value: Debug + Display + Clone;
-
-    fn empty(&self) -> Self::Value;
+    
     fn empty_list(&self) -> Self::Value;
     fn empty_map(&self) -> Self::Value;
 
@@ -120,36 +119,28 @@ pub trait DynamicOps: Sized + 'static {
     #[inline(always)]
     fn merge_to_primitive(
         &self,
-        prefix: Self::Value,
+        prefix: Option<Self::Value>,
         value: Self::Value,
     ) -> DataResult<Self::Value> {
-        if self.data_type(&prefix) != DataType::Empty {
-            let string_value = value.to_string().into();
+        if let Some(prefix) = prefix && self.data_type(&prefix) != DataType::Empty {
             return DataResult::partial(
-                value,
                 BuiltInError::DoNotKnowHowToAppendPrimitive(
-                    string_value,
+                    value.to_string().into(),
                     prefix.to_string().into(),
                 ),
+                value,
             );
         }
         DataResult::success(value)
     }
 
-    fn merge_to_list(&self, list: Self::Value, value: Self::Value) -> DataResult<Self::Value>;
+    fn merge_to_list(&self, list: Option<Self::Value>, value: Self::Value) -> DataResult<Self::Value>;
 
     fn merge_values_to_list(
         &self,
-        list: Self::Value,
+        list: Option<Self::Value>,
         values: impl IntoIterator<Item = Self::Value>,
-    ) -> DataResult<Self::Value> {
-        let mut result = DataResult::success(list);
-
-        for value in values {
-            result = result.and_then(|r| self.merge_to_list(r, value))
-        }
-        result
-    }
+    ) -> DataResult<Self::Value>;
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
