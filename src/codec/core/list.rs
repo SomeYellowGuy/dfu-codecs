@@ -2,12 +2,13 @@ use crate::builder::ListBuilder;
 use crate::codec::{BuiltInError, Decode, Encode};
 use crate::{DataResult, DynamicOps, Lifecycle};
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BoundedVec<T, const MIN: usize, const MAX: usize>(pub Vec<T>);
 
 type UnboundedVec<T> = BoundedVec<T, 0, { usize::MAX }>;
 
 impl<T, const MIN: usize, const MAX: usize> BoundedVec<T, MIN, MAX> {
-    fn too_short_error(size: usize) -> BuiltInError {
+    const fn too_short_error(size: usize) -> BuiltInError {
         BuiltInError::TooShortList {
             size,
             min_size: MIN,
@@ -15,7 +16,7 @@ impl<T, const MIN: usize, const MAX: usize> BoundedVec<T, MIN, MAX> {
         }
     }
 
-    fn too_long_error(size: usize) -> BuiltInError {
+    const fn too_long_error(size: usize) -> BuiltInError {
         BuiltInError::TooLongList {
             size,
             min_size: MIN,
@@ -54,8 +55,6 @@ impl<T: Decode, const MIN: usize, const MAX: usize> Decode for BoundedVec<T, MIN
             .with_lifecycle(Lifecycle::Stable)
             .and_then(|l| {
                 // Optimization: Check for l being too short before doing anything.
-                // Unlike DFU, we don't return a "remaining" value for Decode, so we don't need to collect
-                // failed entries.
                 if l.len() < MIN {
                     return DataResult::error(Self::too_short_error(l.len()));
                 }
@@ -65,19 +64,20 @@ impl<T: Decode, const MIN: usize, const MAX: usize> Decode for BoundedVec<T, MIN
                 for element in l {
                     total_count += 1;
                     if elements.len() >= MAX {
-                        return DataResult::error(BoundedVec::<T, MIN, MAX>::too_long_error(
+                        result = DataResult::error(BoundedVec::<T, MIN, MAX>::too_long_error(
                             total_count,
                         ));
+                        break;
                     }
                     let element_result = T::decode(ops, element);
-                    result = DataResult::apply_2_stable(
-                        |_, element| elements.push(element),
-                        result,
-                        element_result,
-                    )
+                    let (partial, rest) = element_result.extract();
+                    if let Some(value) = partial {
+                        elements.push(value);
+                    }
+                    result = DataResult::apply_2_stable(|(), ()| (), result, rest);
                 }
                 if elements.len() < MIN {
-                    return DataResult::error(Self::too_short_error(total_count));
+                    return DataResult::error(Self::too_short_error(elements.len()));
                 }
                 let decoded = BoundedVec(elements);
 
@@ -125,12 +125,15 @@ impl<T: Decode, const N: usize> Decode for [T; N] {
 
 #[cfg(test)]
 mod tests {
+    use crate::codec::BoundedVec;
     use crate::json_ops::JsonOps;
-    use crate::{assert_decode_error, assert_decode_success, assert_encode_success};
+    use crate::{
+        assert_decode_error, assert_decode_success, assert_encode_error, assert_encode_success,
+    };
     use serde_json::json;
 
     #[test]
-    fn encoding() {
+    fn unbounded_encoding() {
         assert_encode_success!(JsonOps, vec![1, 2] => json!([1, 2]));
 
         assert_encode_success!(JsonOps, Vec::<i32>::new() => json!([]));
@@ -160,12 +163,12 @@ mod tests {
     }
 
     #[test]
-    fn decoding() {
+    fn unbounded_decoding() {
         type NumberGrid = Vec<Vec<f64>>;
 
         assert_decode_success!(JsonOps, Vec<i16>, json!([-1, -2, -3]) => vec![-1, -2, -3]);
         assert_decode_success!(JsonOps, Vec<i16>, json!([1, 2, 6, 24, 120]) => vec![1, 2, 6, 24, 120]);
-        assert_decode_error!(JsonOps, Vec<i16>, json!(["string", "b"]) => "Not a number: \"string\"; Not a number: \"b\"");
+        assert_decode_error!(JsonOps, Vec<i16>, json!(["string", "b"]) => "Not a number: \"b\"; Not a number: \"string\"");
         assert_decode_error!(JsonOps, Vec<i16>, json!(false) => "Not a JSON array: false");
 
         assert_decode_success!(JsonOps, NumberGrid, json!([[0, 0.5, 1.0]]) => vec![vec![0.0, 0.5, 1.0]]);
@@ -182,7 +185,7 @@ mod tests {
         assert_decode_error!(
             JsonOps,
             NumberGrid,
-            json!([[0, 0.5, 1.0], [1, false, 5], [false, 1, "hi"]]) => "Not a number: false; Not a number: false; Not a number: \"hi\""
+            json!([[0, 0.5, 1.0], [1, false, 5], [false, 1, "hi"]]) => "Not a number: \"hi\"; Not a number: false; Not a number: false"
         );
         assert_decode_success!(
             JsonOps,
@@ -191,5 +194,25 @@ mod tests {
         );
         assert_decode_success!(JsonOps, NumberGrid, json!([[]]) => vec![Vec::<f64>::new()]);
         assert_decode_error!(JsonOps, NumberGrid, json!([[[[]]]]) => "Not a number: [[]]");
+    }
+
+    #[test]
+    fn bounded_encoding() {
+        assert_encode_success!(JsonOps, BoundedVec::<_, 1, 3>(vec![1, 2, 3]) => json!([1, 2, 3]));
+        assert_encode_success!(JsonOps, BoundedVec::<_, 2, 4>(vec![1, 2, 3]) => json!([1, 2, 3]));
+        assert_encode_success!(JsonOps, BoundedVec::<_, 2, 4>(vec![1, 2, 3]) => json!([1, 2, 3]));
+
+        assert_encode_error!(JsonOps, BoundedVec::<_, 2, 2>(vec![1, 2, 3]) => "List is too long: 3, expected range [2-2]");
+        assert_encode_error!(JsonOps, BoundedVec::<_, 2, 2>(vec!["foo".to_string(), "bar".to_string(), "baz".to_string()]) => "List is too long: 3, expected range [2-2]");
+    }
+
+    #[test]
+    fn bounded_decoding() {
+        assert_decode_success!(JsonOps, BoundedVec<i32, 1, 3>, json!([1, 2, 3]) => BoundedVec(vec![1, 2, 3]));
+        assert_decode_success!(JsonOps, BoundedVec<i32, 4, 4>, json!([1, 2.0, 3.0, 4]) => BoundedVec(vec![1, 2, 3, 4]));
+        assert_decode_success!(JsonOps, BoundedVec<BoundedVec<bool, 1, 3>, 1, 3>, json!([[true, false, false], [false], [false]]) => BoundedVec(vec![BoundedVec(vec![true, false, false]), BoundedVec(vec![false]), BoundedVec(vec![false])]));
+
+        assert_decode_error!(JsonOps, BoundedVec<bool, 0, 2>, json!([true, false, true]) => "List is too long: 3, expected range [0-2]");
+        assert_decode_error!(JsonOps, BoundedVec<BoundedVec<bool, 1, 3>, 1, 3>, json!([[true, false, true, false], [], [false]]) => "List is too short: 0, expected range [1-3]; List is too long: 4, expected range [1-3]");
     }
 }

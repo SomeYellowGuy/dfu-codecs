@@ -1,5 +1,4 @@
-use std::fmt;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
 /// Represents a Java number of a primitive type.
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -15,9 +14,9 @@ pub enum Number {
 impl From<Number> for i64 {
     fn from(num: Number) -> Self {
         match num {
-            Number::Byte(b) => b as Self,
-            Number::Short(s) => s as Self,
-            Number::Int(i) => i as Self,
+            Number::Byte(b) => Self::from(b),
+            Number::Short(s) => Self::from(s),
+            Number::Int(i) => Self::from(i),
             Number::Long(l) => l,
             Number::Float(f) => f as Self,
             Number::Double(d) => d as Self,
@@ -28,8 +27,8 @@ impl From<Number> for i64 {
 impl From<Number> for i32 {
     fn from(num: Number) -> Self {
         match num {
-            Number::Byte(b) => b as Self,
-            Number::Short(s) => s as Self,
+            Number::Byte(b) => Self::from(b),
+            Number::Short(s) => Self::from(s),
             Number::Int(i) => i,
             Number::Long(l) => l as Self,
             Number::Float(f) => f as Self,
@@ -59,8 +58,8 @@ impl From<Number> for u8 {
 impl From<Number> for f32 {
     fn from(num: Number) -> Self {
         match num {
-            Number::Byte(b) => b as Self,
-            Number::Short(s) => s as Self,
+            Number::Byte(b) => Self::from(b),
+            Number::Short(s) => Self::from(s),
             Number::Int(i) => i as Self,
             Number::Long(l) => l as Self,
             Number::Float(f) => f,
@@ -72,18 +71,18 @@ impl From<Number> for f32 {
 impl From<Number> for f64 {
     fn from(num: Number) -> Self {
         match num {
-            Number::Byte(b) => b as Self,
-            Number::Short(s) => s as Self,
-            Number::Int(i) => i as Self,
+            Number::Byte(b) => Self::from(b),
+            Number::Short(s) => Self::from(s),
+            Number::Int(i) => Self::from(i),
             Number::Long(l) => l as Self,
-            Number::Float(f) => f as Self,
+            Number::Float(f) => Self::from(f),
             Number::Double(d) => d,
         }
     }
 }
 
 impl Display for Number {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
             Self::Byte(v) => write!(f, "{v}"),
             Self::Short(v) => write!(f, "{v}"),
@@ -114,17 +113,19 @@ impl From<Number> for serde_json::Value {
 impl From<serde_json::Number> for Number {
     #[inline]
     fn from(num: serde_json::Number) -> Self {
-        match num {
-            n if n.is_i64() => Self::Long(n.as_i64().unwrap()),
-            n if n.is_f64() => Self::Double(n.as_f64().unwrap()),
-            n => {
-                let n = n.as_u64().unwrap();
-                if let Ok(signed) = i64::try_from(n) {
-                    Self::Long(signed)
-                } else {
-                    Self::Double(n as f64)
-                }
+        if let Some(n) = num.as_i64() {
+            Self::Long(n)
+        } else if let Some(n) = num.as_f64() {
+            Self::Double(n)
+        } else if let Some(n) = num.as_u64() {
+            if let Ok(signed) = i64::try_from(n) {
+                Self::Long(signed)
+            } else {
+                Self::Double(n as f64)
             }
+        } else {
+            // Fallback.
+            Self::Byte(0)
         }
     }
 }

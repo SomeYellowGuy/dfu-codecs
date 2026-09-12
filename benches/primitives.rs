@@ -42,10 +42,10 @@ bench_encode_and_decode!(
     list_wrapper_benches,
     LongStream,
     encode {
-        list_wrapper_encode: vec![24134, -12349123, 287941234].into(),
+        list_wrapper_encode: vec![24_134, -12_349_123, 287_941_234].into(),
     },
     decode {
-        list_wrapper_decode: json!([24134, -12349123, 287941234])
+        list_wrapper_decode: json!([24_134, -12_349_123, 287_941_234])
     }
 );
 

@@ -21,16 +21,21 @@ macro_rules! assert_encode_success {
 /// Asserts that encoding the left expression will lead to an error result whose expanded message is `$right`.
 ///
 /// # Parameters
-/// The syntax is `ops, left => right`.
+/// The syntax is `ops, left => (partial, ) right`.
 ///
 /// - `ops`: The `DynamicOps` to use to encode (without the `&`).
 /// - `left`: The expression to encode.
+/// - `partial` (optional): Assert the partial value exists and is equal to this value.
 /// - `right`: The expected error message.
 #[macro_export]
 macro_rules! assert_encode_error {
     ($ops:expr, $left:expr) => {{
         let result = $crate::codec::Encode::encode_start(&$left, &$ops);
         $crate::assert_data_result_error!(result)
+    }};
+    ($ops:expr, $left:expr => $partial:expr, $right:expr $(,)?) => {{
+        let result = $crate::codec::Encode::encode_start(&$left, &$ops);
+        $crate::assert_data_result_error!(result => $partial, $right)
     }};
     ($ops:expr, $left:expr => $right:expr $(,)?) => {{
         let result = $crate::codec::Encode::encode_start(&$left, &$ops);
@@ -60,17 +65,22 @@ macro_rules! assert_decode_success {
 /// Asserts that decoding the left expression will lead to an error result whose expanded message is `$right`.
 ///
 /// # Parameters
-/// The syntax is `ops, ty, left => right`.
+/// The syntax is `ops, ty, left => (partial, ) right`.
 ///
 /// - `ops`: The `DynamicOps` to use to decode (without the `&`).
 /// - `ty`: The type to use to decode.
 /// - `left`: The value to try decoding.
+/// - `partial` (optional): Assert the partial value exists and is equal to this value.
 /// - `right`: The expected error message.
 #[macro_export]
 macro_rules! assert_decode_error {
     ($ops:expr, $ty:ty, $left:expr $(,)?) => {{
         let result = <$ty as $crate::codec::Decode>::decode(&$ops, &$left);
         $crate::assert_data_result_error!(result)
+    }};
+    ($ops:expr, $ty:ty, $left:expr => $partial:expr, $right:expr $(,)?) => {{
+        let result = <$ty as $crate::codec::Decode>::decode(&$ops, &$left);
+        $crate::assert_data_result_error!(result => $partial, $right)
     }};
     ($ops:expr, $ty:ty, $left:expr => $right:expr $(,)?) => {{
         let result = <$ty as $crate::codec::Decode>::decode(&$ops, &$left);

@@ -28,7 +28,15 @@ impl<L: Decode, R: Decode> Decode for Either<L, R> {
             return second_read;
         }
         DataResult::error(BuiltInError::FailedToParseEither(
+            #[expect(
+                clippy::unwrap_used,
+                reason = "the result is guaranteed to have a data error"
+            )]
             Box::new(first_read.data_error().unwrap()),
+            #[expect(
+                clippy::unwrap_used,
+                reason = "the result is guaranteed to have a data error"
+            )]
             Box::new(second_read.data_error().unwrap()),
         ))
     }

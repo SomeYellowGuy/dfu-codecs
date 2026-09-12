@@ -60,7 +60,11 @@ macro_rules! impl_number_and_unsigned {
         // Unsigned type
         impl Encode for $uty {
             #[inline]
-            fn encode<O: DynamicOps>(&self, ops: &O, prefix: Option<O::Value>) -> DataResult<O::Value> {
+            fn encode<O: DynamicOps>(
+                &self,
+                ops: &O,
+                prefix: Option<O::Value>,
+            ) -> DataResult<O::Value> {
                 <$ty>::try_from(*self).map_or_else(
                     |_| {
                         DataResult::error(BuiltInError::CouldNotFit(
@@ -116,7 +120,7 @@ impl Primitive for bool {
 impl Primitive for String {
     #[inline]
     fn primitive_encode<O: DynamicOps>(&self, ops: &O) -> O::Value {
-        ops.string(self.clone())
+        ops.string(self.to_owned())
     }
 
     #[inline]

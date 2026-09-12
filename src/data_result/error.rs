@@ -1,9 +1,9 @@
 use crate::codec::BuiltInError;
 use std::borrow::Cow;
 use std::error::Error;
-use std::fmt::{Debug, Display, Formatter, Write};
+use std::fmt::{Debug, Display, Formatter, Result as FmtResult, Write};
 
-type InnerDataError = Vec<ErrorMessage>;
+type InnerDataError = Box<Vec<ErrorMessage>>;
 
 /// A list of error messages.
 #[derive(Debug)]
@@ -11,21 +11,27 @@ pub struct DataError(pub(crate) InnerDataError);
 
 impl DataError {
     #[inline]
+    #[must_use]
     pub fn new(message: ErrorMessage) -> Self {
-        Self(vec![message])
+        Self(Box::new(vec![message]))
+    }
+
+    #[inline]
+    pub(crate) fn empty() -> Self {
+        Self(Box::default())
     }
 
     #[inline]
     pub fn push(&mut self, error: ErrorMessage) {
-        self.0.push(error)
+        self.0.push(error);
     }
 
     #[inline]
     pub fn append(&mut self, mut other: DataError) {
-        self.0.append(&mut other.0)
+        self.0.append(&mut other.0);
     }
 
-    pub fn write_message(&self, f: &mut impl Write) -> std::fmt::Result {
+    pub fn write_message(&self, f: &mut impl Write) -> FmtResult {
         for (i, message) in self.0.iter().enumerate() {
             if i > 0 && !matches!(message, ErrorMessage::Additional(_)) {
                 // Add a semicolon delimiter.
@@ -38,7 +44,7 @@ impl DataError {
 }
 
 impl Display for DataError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         self.write_message(f)
     }
 }
@@ -68,7 +74,7 @@ pub enum ErrorMessage {
 }
 
 impl Debug for ErrorMessage {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
             Self::String(s) | Self::Additional(s) => f.debug_tuple("String").field(s).finish(),
             Self::Dynamic(d) => f.debug_tuple("Dynamic").field(&d).finish(),
@@ -78,7 +84,7 @@ impl Debug for ErrorMessage {
 }
 
 impl Display for ErrorMessage {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
             Self::String(s) | Self::Additional(s) => write!(f, "{s}"),
             Self::Dynamic(d) => write!(f, "{d}"),

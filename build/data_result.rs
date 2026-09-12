@@ -14,8 +14,15 @@ pub(crate) fn build() -> TokenStream {
             quote! { #upper #lower }
         });
 
+        let separated_results = (0..n)
+            .into_iter()
+            .rev()
+            .map(|i| format_ident!("{}", (b'a' + i) as char));
+
+        let too_many_arguments = (n >= 7).then_some(quote! { | too_many_arguments });
+
         stream.extend(quote! {
-            apply_data_results!(pub #ident | #n_literal | #(#types),*);
+            apply_data_results!(pub #ident | #n_literal | #(#types),* | #(#separated_results),* #too_many_arguments);
         });
     }
 

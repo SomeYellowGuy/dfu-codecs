@@ -17,6 +17,7 @@ pub use traits::{DataTryFrom, DataTryInto};
 ///
 /// In addition, all `DataResult`s store a [`Lifecycle`] marker for their data.
 #[derive(Debug)]
+#[must_use = "this `DataResult` may be a failed or partial one, which should be handled"]
 pub struct DataResult<R> {
     pub kind: DataResultKind<R>,
     pub lifecycle: Lifecycle,
@@ -40,19 +41,19 @@ pub enum DataResultKind<R> {
 
 impl<R> DataResult<R> {
     #[inline]
-    fn new(kind: DataResultKind<R>, lifecycle: Lifecycle) -> Self {
+    const fn new(kind: DataResultKind<R>, lifecycle: Lifecycle) -> Self {
         Self { kind, lifecycle }
     }
 
     /// Creates a new *successful* data result with the default lifecycle.
     #[inline]
-    pub fn success(success: R) -> Self {
+    pub const fn success(success: R) -> Self {
         Self::success_with_lifecycle(success, Lifecycle::Experimental)
     }
 
     /// Creates a new *successful* data result with the provided lifecycle.
     #[inline]
-    pub fn success_with_lifecycle(success: R, lifecycle: Lifecycle) -> Self {
+    pub const fn success_with_lifecycle(success: R, lifecycle: Lifecycle) -> Self {
         Self::new(DataResultKind::Success(success), lifecycle)
     }
 
@@ -102,7 +103,7 @@ impl<R> DataResult<R> {
 
     /// Replaces the lifecycle of this result with lifecycle.
     #[inline]
-    pub fn with_lifecycle(mut self, lifecycle: Lifecycle) -> Self {
+    pub const fn with_lifecycle(mut self, lifecycle: Lifecycle) -> Self {
         self.lifecycle = lifecycle;
         self
     }
@@ -118,13 +119,13 @@ impl<R> DataResult<R> {
 
     /// Returns whether this result is a success result.
     #[inline]
-    pub fn is_success(&self) -> bool {
+    pub const fn is_success(&self) -> bool {
         matches!(self.kind, DataResultKind::Success(_))
     }
 
     /// Returns whether this result is a success or partial result.
     #[inline]
-    pub fn is_success_or_partial(&self) -> bool {
+    pub const fn is_success_or_partial(&self) -> bool {
         matches!(
             self.kind,
             DataResultKind::Success(_) | DataResultKind::Partial { .. }
@@ -133,7 +134,7 @@ impl<R> DataResult<R> {
 
     /// Returns whether this result is an error (partial or failed) result.
     #[inline]
-    pub fn is_error(&self) -> bool {
+    pub const fn is_error(&self) -> bool {
         !self.is_success()
     }
 
@@ -154,14 +155,14 @@ impl<R> DataResult<R> {
         match self.kind {
             DataResultKind::Success(success) => Some(success),
             DataResultKind::Partial { value, .. } => Some(value),
-            _ => None,
+            DataResultKind::Failed(_) => None,
         }
     }
 
     /// Consumes this result, returning the reference to its value wrapped in a `Some` if it is a success.
     /// Otherwise, this returns `None`.
     #[inline]
-    pub fn success_ref(&self) -> Option<&R> {
+    pub const fn success_ref(&self) -> Option<&R> {
         match &self.kind {
             DataResultKind::Success(success) => Some(success),
             _ => None,
@@ -171,11 +172,11 @@ impl<R> DataResult<R> {
     /// Otherwise, this returns `None`.
     /// Consumes this result, returning the reference to its value wrapped in a `Some` if it is a success or partial.
     #[inline]
-    pub fn success_or_partial_ref(&self) -> Option<&R> {
+    pub const fn success_or_partial_ref(&self) -> Option<&R> {
         match &self.kind {
             DataResultKind::Success(success) => Some(success),
             DataResultKind::Partial { value, .. } => Some(value),
-            _ => None,
+            DataResultKind::Failed(_) => None,
         }
     }
 
@@ -240,7 +241,7 @@ impl<R> DataResult<R> {
             DataResultKind::Failed(error) => (None, Some(error)),
         };
         if let Some(error) = error {
-            vec.append(error)
+            vec.append(error);
         }
         value
     }
@@ -340,9 +341,9 @@ impl<R> DataResult<R> {
             );
         }
 
-        let mut error = DataError(Vec::new());
-        let a = a.separate(&mut error);
+        let mut error = DataError::empty();
         let b = b.separate(&mut error);
+        let a = a.separate(&mut error);
 
         let kind = match (a, b) {
             (Some(a), Some(b)) => DataResultKind::Partial {
@@ -404,23 +405,22 @@ impl<R> DataResult<R> {
     #[inline]
     pub fn data_error(self) -> Option<DataError> {
         match self.kind {
-            DataResultKind::Partial { error, .. } => Some(error),
-            DataResultKind::Failed(error) => Some(error),
-            _ => None,
+            DataResultKind::Partial { error, .. } | DataResultKind::Failed(error) => Some(error),
+            DataResultKind::Success(_) => None,
         }
     }
 }
 
 #[macro_export]
 macro_rules! apply_data_results {
-    ($vis:vis $name:ident | $count:literal | $($generic:ident $results:ident),+) => {
+    ($vis:vis $name:ident | $count:literal | $($generic:ident $results:ident),+ | $($separated_results:ident),+  $(| $too_many_arguments:ident)?) => {
         #[doc = concat!(
             "Combines the values inside ", $count, " results, applying them in `f` if all results have values.\n\n",
             " - If all results are successes, the returned one is also a success.\n",
             " - If not all results are a success, and no results are failed, the returned one is a partial.\n",
             " - Otherwise, the returned one is a failed result."
         )]
-        #[allow(clippy::too_many_arguments)]
+        $(#[expect(clippy::$too_many_arguments, reason = "the nature of the function requires taking many generic types")])?
         $vis fn $name< $($generic),+ >(f: impl FnOnce( $($generic),+ ) -> R,
             $( $results: DataResult<$generic> ),+
         ) -> DataResult<R> {
@@ -431,8 +431,9 @@ macro_rules! apply_data_results {
                 ), resultant_lifecycle);
             }
 
-            let mut error = DataError(Vec::new());
-            $( let $results = $results.separate(&mut error); )+
+            let mut error = DataError::empty();
+            // Error messages are actually applied in reverse (last to first result)!
+            $( let $separated_results = $separated_results.separate(&mut error); )+
 
             let kind = match ( $($results,)+ ) {
                 ( $(Some($results)),+ ) => DataResultKind::Partial { value: f( $( $results ),+ ), error },

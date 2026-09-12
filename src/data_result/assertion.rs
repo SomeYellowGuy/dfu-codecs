@@ -48,4 +48,23 @@ macro_rules! assert_data_result_error {
             "`DataResult` was successful, but the error messages should have matched"
         );
     }};
+    ($left:expr => $partial:expr, $right:expr $(,)?) => {{
+        let result = $left;
+        assert!(
+            result.is_error() && result.is_success_or_partial(),
+            "`DataResult` should have been a partial, but got {:?}",
+            result
+        );
+        let (value, rest) = result.extract();
+        assert_eq!(
+            value.unwrap(),
+            $partial,
+            "`DataResult` was partial, but the values should have matched"
+        );
+        assert_eq!(
+            rest.message().unwrap(),
+            $right.to_string(),
+            "`DataResult` was partial, but the error messages should have matched"
+        );
+    }};
 }

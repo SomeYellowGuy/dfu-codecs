@@ -34,7 +34,7 @@ macro_rules! impl_try_list_wrapper {
 /// The `Value` of this trait is the type that can be used to represent anything in this format.
 pub trait DynamicOps: Sized + 'static {
     type Value: Debug + Display + Clone;
-    
+
     fn empty_list(&self) -> Self::Value;
     fn empty_map(&self) -> Self::Value;
 
@@ -122,7 +122,9 @@ pub trait DynamicOps: Sized + 'static {
         prefix: Option<Self::Value>,
         value: Self::Value,
     ) -> DataResult<Self::Value> {
-        if let Some(prefix) = prefix && self.data_type(&prefix) != DataType::Empty {
+        if let Some(prefix) = prefix
+            && self.data_type(&prefix) != DataType::Empty
+        {
             return DataResult::partial(
                 BuiltInError::DoNotKnowHowToAppendPrimitive(
                     value.to_string().into(),
@@ -134,7 +136,11 @@ pub trait DynamicOps: Sized + 'static {
         DataResult::success(value)
     }
 
-    fn merge_to_list(&self, list: Option<Self::Value>, value: Self::Value) -> DataResult<Self::Value>;
+    fn merge_to_list(
+        &self,
+        list: Option<Self::Value>,
+        value: Self::Value,
+    ) -> DataResult<Self::Value>;
 
     fn merge_values_to_list(
         &self,

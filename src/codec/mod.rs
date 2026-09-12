@@ -55,10 +55,10 @@ pub trait Encode {
     where
         Self: PartialEq + Sized,
     {
-        if default != *self {
-            self.encode_field(prefix, ops, name)
-        } else {
+        if default == *self {
             prefix
+        } else {
+            self.encode_field(prefix, ops, name)
         }
     }
 }

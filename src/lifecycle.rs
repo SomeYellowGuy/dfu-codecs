@@ -60,7 +60,7 @@ impl Add for Lifecycle {
 
 impl AddAssign for Lifecycle {
     fn add_assign(&mut self, rhs: Self) {
-        *self = self.add(rhs)
+        *self = self.add(rhs);
     }
 }
 

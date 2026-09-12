@@ -6,8 +6,10 @@ use std::fmt::Display;
 pub trait ListBuilder: Sized {
     type Value: Display;
 
+    #[must_use]
     fn add(self, value: Self::Value) -> Self;
 
+    #[must_use]
     fn add_result(self, value: DataResult<Self::Value>) -> Self;
 
     fn build(self, prefix: Option<Self::Value>) -> DataResult<Self::Value>;
@@ -59,10 +61,13 @@ impl<O: DynamicOps> ListBuilder for DefaultListBuilder<'_, O> {
 pub trait RecordBuilder: Sized {
     type Value: Display;
 
+    #[must_use]
     fn add(self, key: impl Into<String>, value: Self::Value) -> Self;
 
+    #[must_use]
     fn add_result(self, key: impl Into<String>, value: DataResult<Self::Value>) -> Self;
 
+    #[must_use]
     fn add_field<O: DynamicOps<Value = Self::Value>>(
         self,
         ops: &O,
@@ -72,6 +77,7 @@ pub trait RecordBuilder: Sized {
         self.add_result(key, value.encode_start(ops))
     }
 
+    #[must_use]
     fn add_optional_field<O: DynamicOps<Value = Self::Value>>(
         self,
         ops: &O,

@@ -85,6 +85,7 @@ decode_from_map_decode!(Abcd);
 pub struct Unit;
 
 impl MapEncode for Unit {
+    #[inline]
     fn map_encode<O: DynamicOps, B: RecordBuilder<Value = O::Value>>(
         &self,
         _ops: &O,
@@ -95,6 +96,7 @@ impl MapEncode for Unit {
 }
 encode_from_map_encode!(Unit);
 impl MapDecode for Unit {
+    #[inline]
     fn map_decode<O: DynamicOps>(
         _ops: &O,
         _input: &impl MapLike<Value = O::Value>,

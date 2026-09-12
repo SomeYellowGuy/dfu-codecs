@@ -3,7 +3,7 @@ use dfu_codecs::xmap_codec_impl;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
-use std::fmt::Display;
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
 mod common;
 
@@ -12,7 +12,7 @@ mod common;
 struct LowercaseString(String);
 
 impl Display for LowercaseString {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         Display::fmt(&self.0, f)
     }
 }
@@ -32,6 +32,12 @@ impl From<String> for LowercaseString {
 impl From<&LowercaseString> for String {
     fn from(value: &LowercaseString) -> Self {
         value.0.to_lowercase()
+    }
+}
+
+impl From<&str> for LowercaseString {
+    fn from(value: &str) -> Self {
+        LowercaseString::new(value)
     }
 }
 

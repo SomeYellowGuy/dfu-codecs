@@ -4,39 +4,41 @@ use crate::{DataTryFrom, DynamicOps, Lifecycle, MapLike, RecordBuilder};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::fmt::Display;
-use std::hash::Hash;
+use std::hash::{BuildHasher, Hash};
 
-fn base_map_encode<O, K, V, B>(mut prefix: B, ops: &O, input: &HashMap<K, V>) -> B
+fn base_map_encode<O, K, V, S, B>(mut prefix: B, ops: &O, input: &HashMap<K, V, S>) -> B
 where
     O: DynamicOps,
     for<'a> &'a K: Into<String>,
     K: Clone,
     V: Encode,
+    S: BuildHasher,
     B: RecordBuilder<Value = O::Value>,
 {
     for (key, value) in input {
-        prefix = prefix.add_result(key, value.encode_start(ops))
+        prefix = prefix.add_result(key, value.encode_start(ops));
     }
     prefix
 }
 
-fn base_map_decode<O, K, V>(
+fn base_map_decode<O, K, V, S>(
     ops: &O,
     input: &impl MapLike<Value = O::Value>,
-) -> DataResult<HashMap<K, V>>
+) -> DataResult<HashMap<K, V, S>>
 where
     O: DynamicOps,
     O::Value: Clone,
-    K: DataTryFrom<String> + Eq + Hash + Display,
+    K: for<'a> DataTryFrom<&'a str> + Eq + Hash + Display,
     V: Decode,
+    S: BuildHasher + Default,
 {
-    let mut elements = HashMap::new();
+    let mut elements = HashMap::with_hasher(S::default());
     let mut failed = Vec::new();
 
     let result = input.entries().fold(
         DataResult::success_with_lifecycle((), Lifecycle::Stable),
         |r, (key, value)| {
-            let key_result = K::data_try_from(key.to_string());
+            let key_result = K::data_try_from(key);
             let value_result = V::decode(ops, value);
 
             let pair = DataResult::apply_2_stable(|k, v| (k, v), key_result, value_result);
@@ -48,7 +50,7 @@ where
                     Entry::Occupied(entry) => {
                         failed.push((key, value));
                         return DataResult::apply_2_stable::<(), ()>(
-                            |u, _| u,
+                            |(), ()| (),
                             r,
                             DataResult::error(BuiltInError::DuplicateEntry(
                                 entry.key().to_string().into(),
@@ -64,7 +66,7 @@ where
                 failed.push((key, value));
             }
 
-            DataResult::apply_2_stable(|u, _| u, r, rest)
+            DataResult::apply_2_stable(|u, ()| u, r, rest)
         },
     );
 
@@ -74,21 +76,23 @@ where
         .add_message_if_error(|| ErrorMessage::additional(format!(" missed input: {errors}")))
 }
 
-impl<K, V> Encode for HashMap<K, V>
+impl<K, V, S> Encode for HashMap<K, V, S>
 where
     K: Encode + Clone + Hash,
     for<'a> &'a K: Into<String>,
     V: Encode,
+    S: BuildHasher,
 {
     fn encode<O: DynamicOps>(&self, ops: &O, prefix: Option<O::Value>) -> DataResult<O::Value> {
         base_map_encode(ops.map_builder(), ops, self).build(prefix)
     }
 }
 
-impl<K, V> Decode for HashMap<K, V>
+impl<K, V, S> Decode for HashMap<K, V, S>
 where
-    K: DataTryFrom<String> + Eq + Hash + Display,
+    K: for<'a> DataTryFrom<&'a str> + Eq + Hash + Display,
     V: Decode,
+    S: BuildHasher + Default,
 {
     fn decode<O: DynamicOps>(ops: &O, input: &O::Value) -> DataResult<Self> {
         ops.try_map(input)
@@ -105,7 +109,7 @@ mod tests {
     };
     use serde_json::json;
     use std::collections::HashMap;
-    use std::fmt::{Display, Formatter};
+    use std::fmt::{Display, Formatter, Result as FmtResult};
 
     #[test]
     fn simple_encoding() {
@@ -141,7 +145,7 @@ mod tests {
         type StringIntegerMap = HashMap<StringInteger, bool>;
 
         impl Display for StringInteger {
-            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
                 write!(f, "{}", self.0)
             }
         }
@@ -160,6 +164,12 @@ mod tests {
                     |_| DataResult::error("Could not parse string"),
                     |i| DataResult::success(Self(i)),
                 )
+            }
+        }
+
+        impl DataTryFrom<&str> for StringInteger {
+            fn data_try_from(value: &str) -> DataResult<Self> {
+                Self::data_try_from(value.to_string())
             }
         }
 
@@ -208,7 +218,7 @@ mod tests {
             StringIntegerMap,
             json!({
                 "0": true, "5": -99, "89": [1, 2, 3]
-            }) => "Not a boolean: -99; Not a boolean: [1,2,3] missed input: {\"5\":-99,\"89\":[1,2,3]}"
+            }) => "Not a boolean: [1,2,3]; Not a boolean: -99 missed input: {\"5\":-99,\"89\":[1,2,3]}"
         );
     }
 }

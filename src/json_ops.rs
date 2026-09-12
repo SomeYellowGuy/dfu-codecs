@@ -90,7 +90,7 @@ impl DynamicOps for JsonOps {
         Value::Bool(value)
     }
 
-    #[inline]
+    #[inline(always)]
     fn string(&self, value: String) -> Self::Value {
         Value::String(value)
     }
@@ -176,25 +176,40 @@ impl DynamicOps for JsonOps {
     }
 
     #[inline]
-    fn merge_to_list(&self, list: Option<Self::Value>, value: Self::Value) -> DataResult<Self::Value> {
+    fn merge_to_list(
+        &self,
+        list: Option<Self::Value>,
+        value: Self::Value,
+    ) -> DataResult<Self::Value> {
         match list {
             None | Some(Value::Null) => DataResult::success(Value::Array(vec![value])),
             Some(Value::Array(mut vec)) => {
                 vec.push(value);
                 DataResult::success(Value::Array(vec))
             }
-            Some(list) => DataResult::error(JsonOpsError::MergeCalledWithNoList(list.to_string().into())),
+            Some(list) => {
+                DataResult::error(JsonOpsError::MergeCalledWithNoList(list.to_string().into()))
+            }
         }
     }
 
-    fn merge_values_to_list(&self, list: Option<Self::Value>, values: impl IntoIterator<Item=Self::Value>) -> DataResult<Self::Value> {
+    fn merge_values_to_list(
+        &self,
+        list: Option<Self::Value>,
+        values: impl IntoIterator<Item = Self::Value>,
+    ) -> DataResult<Self::Value> {
         match list {
-            None | Some(Value::Null) => DataResult::success(Value::Array(values.into_iter().collect())),
+            None | Some(Value::Null) => {
+                DataResult::success(Value::Array(values.into_iter().collect()))
+            }
             Some(Value::Array(mut vec)) => {
                 vec.extend(values);
                 DataResult::success(Value::Array(vec))
             }
-            Some(list) => DataResult::partial(JsonOpsError::MergeCalledWithNoList(list.to_string().into()), list),
+            Some(list) => DataResult::partial(
+                JsonOpsError::MergeCalledWithNoList(list.to_string().into()),
+                list,
+            ),
         }
     }
 }
@@ -280,7 +295,10 @@ impl ObjectBuilder {
                 map.extend(builder);
                 DataResult::success(Value::Object(map))
             }
-            Some(prefix) => DataResult::partial(JsonOpsError::CannotAppendMapToNotMap(prefix.to_string().into()), prefix)
+            Some(prefix) => DataResult::partial(
+                JsonOpsError::CannotAppendMapToNotMap(prefix.to_string().into()),
+                prefix,
+            ),
         }
     }
 }
