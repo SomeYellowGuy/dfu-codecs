@@ -2,13 +2,14 @@ use crate::builder::{ListBuilder, RecordBuilder};
 use crate::codec::BuiltInError;
 use crate::number::Number;
 use crate::{DataResult, DefaultListBuilder};
-use std::fmt::{Debug, Display};
+use std::borrow::Cow;
+use std::fmt::{Debug, Result as FmtResult, Write};
 
 macro_rules! impl_try_list_wrapper {
     ($name:ident | $ty:ty | $type_name:literal) => {
         fn $name(&self, input: &Self::Value) -> DataResult<Vec<$ty>> {
             if self.data_type(input) != DataType::List {
-                // This check guarantees that the data type is a list, so we can
+                // This check guarantees that the data type is not a list, so we can
                 // safely return the result directly.
                 return self.try_list(input).map(|_| Vec::new());
             }
@@ -19,7 +20,7 @@ macro_rules! impl_try_list_wrapper {
                     let Some(n) = self.try_number(&n).into_success() else {
                         return DataResult::error(BuiltInError::SomeElementsAreDifferent(
                             $type_name,
-                            input.to_string().into(),
+                            input.value_to_string().into(),
                         ));
                     };
                     array.push(<$ty>::from(n));
@@ -30,10 +31,28 @@ macro_rules! impl_try_list_wrapper {
     };
 }
 
+/// A replica of [`fmt::Write`] for ops format types, like JSON values.
+pub trait DisplayValue {
+    fn write_display(&self, f: &mut impl Write) -> FmtResult;
+
+    fn value_to_string(&self) -> String {
+        let mut output = String::new();
+        self.write_display(&mut output)
+            .expect("String should have been formattedclear");
+        output
+    }
+}
+
+impl<T: DisplayValue> DisplayValue for &T {
+    fn write_display(&self, f: &mut impl Write) -> FmtResult {
+        T::write_display(self, f)
+    }
+}
+
 /// A trait describing methods to read and write a specific format (like NBT or JSON).
 /// The `Value` of this trait is the type that can be used to represent anything in this format.
 pub trait DynamicOps: Sized + 'static {
-    type Value: Debug + Display + Clone;
+    type Value: Debug + DisplayValue + Clone;
 
     fn empty_list(&self) -> Self::Value;
     fn empty_map(&self) -> Self::Value;
@@ -127,8 +146,8 @@ pub trait DynamicOps: Sized + 'static {
         {
             return DataResult::partial(
                 BuiltInError::DoNotKnowHowToAppendPrimitive(
-                    value.to_string().into(),
-                    prefix.to_string().into(),
+                    value.value_to_string().into(),
+                    prefix.value_to_string().into(),
                 ),
                 value,
             );
@@ -161,9 +180,16 @@ pub enum DataType {
 
 /// Provides common methods to read a specific entry or all entries of a map.
 pub trait MapLike {
-    type Value: Display;
+    type KeyRef<'a>: Clone + Into<Cow<'a, str>>
+    where
+        Self: 'a;
 
+    type Value: DisplayValue;
+
+    /// Tries to get a value of this map with the provided key.
+    ///
+    ///
     fn get(&self, key: &str) -> Option<&Self::Value>;
 
-    fn entries(&self) -> impl Iterator<Item = (&str, &Self::Value)>;
+    fn entries(&self) -> impl Iterator<Item = (Self::KeyRef<'_>, &Self::Value)>;
 }

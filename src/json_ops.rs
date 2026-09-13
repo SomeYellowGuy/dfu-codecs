@@ -2,9 +2,10 @@ use crate::DataResult;
 use crate::builder::{ListBuilder, RecordBuilder};
 use crate::codec::BuiltInError;
 use crate::data_result::ErrorMessage;
-use crate::dynamic_ops::{DataType, DynamicOps, MapLike};
+use crate::dynamic_ops::{DataType, DisplayValue, DynamicOps, MapLike};
 use crate::number::Number;
 use serde_json::{Map, Value};
+use std::fmt::{Result as FmtResult, Write};
 use thiserror::Error;
 
 pub struct JsonOps;
@@ -32,6 +33,12 @@ pub enum JsonOpsError {
 impl From<JsonOpsError> for ErrorMessage {
     fn from(value: JsonOpsError) -> Self {
         ErrorMessage::BuiltIn(BuiltInError::Json(value))
+    }
+}
+
+impl DisplayValue for Value {
+    fn write_display(&self, f: &mut impl Write) -> FmtResult {
+        write!(f, "{self}")
     }
 }
 
@@ -193,6 +200,7 @@ impl DynamicOps for JsonOps {
         }
     }
 
+    #[inline]
     fn merge_values_to_list(
         &self,
         list: Option<Self::Value>,
@@ -250,26 +258,23 @@ impl ListBuilder for ArrayBuilder {
 
     #[inline]
     fn build(self, prefix: Option<Self::Value>) -> DataResult<Self::Value> {
-        self.0.and_then(|v| {
-            let built = match prefix {
-                None | Some(Value::Null) => v,
-                Some(Value::Array(mut prefix_vec)) => {
-                    prefix_vec.extend(v);
-                    prefix_vec
+        self.0.and_then(|v| match prefix {
+            None | Some(Value::Null) => DataResult::success(Value::Array(v)),
+            Some(mut prefix) => match prefix {
+                Value::Array(ref mut vec) => {
+                    vec.extend(v);
+                    DataResult::success(prefix)
                 }
-                Some(prefix) => {
-                    let prefix_string = prefix.to_string().into();
-                    return DataResult::partial(
-                        JsonOpsError::CannotAppendListToNotList(prefix_string),
-                        prefix,
-                    );
-                }
-            };
-            DataResult::success(Value::Array(built))
+                prefix => DataResult::partial(
+                    JsonOpsError::CannotAppendListToNotList(prefix.to_string().into()),
+                    prefix,
+                ),
+            },
         })
     }
 }
 
+/// A builder for constructing [`Value::Object`]s.
 pub struct ObjectBuilder(DataResult<Map<String, Value>>);
 
 impl ObjectBuilder {
@@ -291,14 +296,16 @@ impl ObjectBuilder {
     fn final_build(builder: Map<String, Value>, prefix: Option<Value>) -> DataResult<Value> {
         match prefix {
             None | Some(Value::Null) => DataResult::success(Value::Object(builder)),
-            Some(Value::Object(mut map)) => {
-                map.extend(builder);
-                DataResult::success(Value::Object(map))
-            }
-            Some(prefix) => DataResult::partial(
-                JsonOpsError::CannotAppendMapToNotMap(prefix.to_string().into()),
-                prefix,
-            ),
+            Some(mut prefix) => match prefix {
+                Value::Object(ref mut map) => {
+                    map.extend(builder);
+                    DataResult::success(prefix)
+                }
+                _ => DataResult::partial(
+                    JsonOpsError::CannotAppendMapToNotMap(prefix.to_string().into()),
+                    prefix,
+                ),
+            },
         }
     }
 }
@@ -325,15 +332,16 @@ impl RecordBuilder for ObjectBuilder {
 }
 
 impl MapLike for Map<String, Value> {
+    type KeyRef<'a> = &'a str;
     type Value = Value;
 
     #[inline]
-    fn get(&self, key: &str) -> Option<&Self::Value> {
+    fn get(&self, key: Self::KeyRef<'_>) -> Option<&Self::Value> {
         self.get(key)
     }
 
     #[inline]
-    fn entries(&self) -> impl Iterator<Item = (&str, &Self::Value)> {
+    fn entries(&self) -> impl Iterator<Item = (Self::KeyRef<'_>, &Self::Value)> {
         self.into_iter().map(|(k, v)| (k.as_str(), v))
     }
 }

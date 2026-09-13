@@ -1,11 +1,14 @@
 use crate::codec::{BuiltInError, Decode, Encode};
 use crate::data_result::{DataResult, ErrorMessage};
+use crate::dynamic_ops::DisplayValue;
 use crate::{DataTryFrom, DynamicOps, Lifecycle, MapLike, RecordBuilder};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::fmt::Display;
 use std::hash::{BuildHasher, Hash};
 
+#[inline]
 fn base_map_encode<O, K, V, S, B>(mut prefix: B, ops: &O, input: &HashMap<K, V, S>) -> B
 where
     O: DynamicOps,
@@ -28,7 +31,7 @@ fn base_map_decode<O, K, V, S>(
 where
     O: DynamicOps,
     O::Value: Clone,
-    K: for<'a> DataTryFrom<&'a str> + Eq + Hash + Display,
+    K: for<'a> DataTryFrom<Cow<'a, str>> + Eq + Hash + Display,
     V: Decode,
     S: BuildHasher + Default,
 {
@@ -38,7 +41,8 @@ where
     let result = input.entries().fold(
         DataResult::success_with_lifecycle((), Lifecycle::Stable),
         |r, (key, value)| {
-            let key_result = K::data_try_from(key);
+            let key_clone = key.clone();
+            let key_result = K::data_try_from(key_clone.into());
             let value_result = V::decode(ops, value);
 
             let pair = DataResult::apply_2_stable(|k, v| (k, v), key_result, value_result);
@@ -70,10 +74,14 @@ where
         },
     );
 
-    let errors = ops.map(failed.into_iter().map(|(k, v)| (k.to_owned(), v.clone())));
-    result
-        .with_data(elements)
-        .add_message_if_error(|| ErrorMessage::additional(format!(" missed input: {errors}")))
+    let errors = ops.map(
+        failed
+            .into_iter()
+            .map(|(k, v)| (k.into().to_string(), v.clone())),
+    );
+    result.with_data(elements).add_message_if_error(|| {
+        ErrorMessage::additional(format!(" missed input: {}", errors.value_to_string()))
+    })
 }
 
 impl<K, V, S> Encode for HashMap<K, V, S>
@@ -90,7 +98,7 @@ where
 
 impl<K, V, S> Decode for HashMap<K, V, S>
 where
-    K: for<'a> DataTryFrom<&'a str> + Eq + Hash + Display,
+    K: for<'a> DataTryFrom<Cow<'a, str>> + Eq + Hash + Display,
     V: Decode,
     S: BuildHasher + Default,
 {
@@ -103,6 +111,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::codec::Cow;
     use crate::{
         DataResult, DataTryFrom, JsonOps, assert_decode_error, assert_decode_success,
         assert_encode_success, comap_flat_map_codec_impl,
@@ -157,8 +166,8 @@ mod tests {
             }
         }
 
-        impl DataTryFrom<String> for StringInteger {
-            fn data_try_from(value: String) -> DataResult<Self> {
+        impl DataTryFrom<&str> for StringInteger {
+            fn data_try_from(value: &str) -> DataResult<Self> {
                 // Try to parse an integer.
                 value.parse().map_or_else(
                     |_| DataResult::error("Could not parse string"),
@@ -167,9 +176,15 @@ mod tests {
             }
         }
 
-        impl DataTryFrom<&str> for StringInteger {
-            fn data_try_from(value: &str) -> DataResult<Self> {
-                Self::data_try_from(value.to_string())
+        impl DataTryFrom<String> for StringInteger {
+            fn data_try_from(value: String) -> DataResult<Self> {
+                Self::data_try_from(value.as_str())
+            }
+        }
+
+        impl DataTryFrom<Cow<'_, str>> for StringInteger {
+            fn data_try_from(value: Cow<'_, str>) -> DataResult<Self> {
+                Self::data_try_from(value.as_ref())
             }
         }
 

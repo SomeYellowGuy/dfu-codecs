@@ -2,6 +2,7 @@ use criterion::{criterion_group, criterion_main};
 use dfu_codecs::xmap_codec_impl;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
@@ -38,6 +39,12 @@ impl From<&LowercaseString> for String {
 impl From<&str> for LowercaseString {
     fn from(value: &str) -> Self {
         LowercaseString::new(value)
+    }
+}
+
+impl From<Cow<'_, str>> for LowercaseString {
+    fn from(value: Cow<'_, str>) -> Self {
+        Self::from(value.as_ref())
     }
 }
 

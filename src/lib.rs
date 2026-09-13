@@ -11,7 +11,7 @@ pub use builder::{DefaultListBuilder, ListBuilder, RecordBuilder};
 pub use data_result::{
     DataError, DataResult, DataResultKind, DataResultStatus, DataTryFrom, DataTryInto,
 };
-pub use dynamic_ops::{DataType, DynamicOps, MapLike};
+pub use dynamic_ops::{DataType, DisplayValue, DynamicOps, MapLike};
 pub use lifecycle::Lifecycle;
 pub use number::Number;
 
