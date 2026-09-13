@@ -29,12 +29,12 @@ bench_encode_and_decode_with_serde!(
     encode {
         string_len_10_encode: create_string(10),
         string_len_1000_encode: create_string(1000),
-        string_len_100000_encode: create_string(100000),
+        string_len_100000_encode: create_string(100_000),
     },
     decode {
         string_len_10_decode: create_string_json(10),
         string_len_1000_decode: create_string_json(1000),
-        string_len_100000_decode: create_string_json(100000)
+        string_len_100000_decode: create_string_json(100_000)
     }
 );
 
