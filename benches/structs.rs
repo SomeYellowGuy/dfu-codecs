@@ -123,7 +123,7 @@ bench_encode_and_decode_with_serde!(
     },
     decode {
         simple_decode: abc_json(),
-        simple_decode_no_key: json!({ "a": 1, "b": "Hello world!" }),
+        simple_decode_missing_key: json!({ "a": 1, "b": "Hello world!" }),
         simple_decode_wrong_type: json!({ "a": 1, "b": "Hello world!", "c": 4 })
     }
 );
@@ -136,7 +136,7 @@ bench_encode_and_decode_with_serde!(
     },
     decode {
         composite_decode: json!({"abc": abc_json(), "d": 1.23}),
-        composite_decode_no_key: json!({"abc": abc_json()}),
+        composite_decode_missing_key: json!({"abc": abc_json()}),
         composite_decode_wrong_type: json!({"abc": abc_json(), "d": true})
     }
 );

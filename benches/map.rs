@@ -1,6 +1,5 @@
 use criterion::{criterion_group, criterion_main};
 use dfu_codecs::xmap_codec_impl;
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -8,8 +7,7 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 
 mod common;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
-#[serde(transparent)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct LowercaseString(String);
 
 impl Display for LowercaseString {
@@ -50,26 +48,33 @@ impl From<Cow<'_, str>> for LowercaseString {
 
 xmap_codec_impl!(String => LowercaseString, LowercaseString::from, String::from);
 
-fn hash_map() -> HashMap<LowercaseString, bool> {
+fn hash_map() -> HashMap<String, bool> {
     let mut map = HashMap::new();
-    map.insert(LowercaseString::new("Apple"), true);
-    map.insert(LowercaseString::new("Banana"), true);
-    map.insert(LowercaseString::new("Orange"), false);
-    map.insert(LowercaseString::new("Guava"), true);
-    map.insert(LowercaseString::new("Pineapple"), false);
+    map.insert("Apple".into(), true);
+    map.insert("Banana".into(), true);
+    map.insert("Orange".into(), false);
+    map.insert("Guava".into(), true);
+    map.insert("Pineapple".into(), false);
     map
 }
 
 bench_encode_and_decode_with_serde!(
-    benches, HashMap<LowercaseString, bool>,
+    common_benches, HashMap<String, bool>,
     encode {
         encode: hash_map(),
     },
     decode {
         decode: json!({ "Apple": true, "Banana": true, "Orange": false, "Guava": true, "Pineapple": false }),
-        decode_wrong_type: json!({ "Apple": true, "Banana": true, "Orange": false, "Guava": true, "Pineapple": [false] }),
+        decode_wrong_type: json!({ "Apple": true, "Banana": true, "Orange": false, "Guava": true, "Pineapple": [false] })
+    }
+);
+
+bench_encode_and_decode!(
+    specific_benches, HashMap<LowercaseString, bool>,
+    encode { },
+    decode {
         decode_duplicate_key: json!({ "Apple": true, "Banana": true, "Orange": false, "Guava": true, "guava": false })
     }
 );
 
-criterion_main!(benches);
+criterion_main!(common_benches, specific_benches);

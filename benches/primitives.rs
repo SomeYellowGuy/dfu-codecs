@@ -2,10 +2,17 @@ mod common;
 
 use criterion::criterion_group;
 use criterion::criterion_main;
-use dfu_codecs::codec::LongStream;
+use dfu_codecs::JsonOps;
+use dfu_codecs::codec::{Encode, LongStream};
 use serde_json::json;
 
-const TEST_STR: &str = "ABCDEabcde123#$";
+fn create_string(len: usize) -> String {
+    "a".repeat(len)
+}
+
+fn create_string_json(len: usize) -> serde_json::Value {
+    create_string(len).encode_start(&JsonOps).unwrap()
+}
 
 bench_encode_and_decode_with_serde!(
     number_benches,
@@ -20,10 +27,14 @@ bench_encode_and_decode_with_serde!(
     string_benches,
     String,
     encode {
-        string_encode: TEST_STR.to_string(),
+        string_len_10_encode: create_string(10),
+        string_len_1000_encode: create_string(1000),
+        string_len_100000_encode: create_string(100000),
     },
     decode {
-        string_decode: json!(TEST_STR)
+        string_len_10_decode: create_string_json(10),
+        string_len_1000_decode: create_string_json(1000),
+        string_len_100000_decode: create_string_json(100000)
     }
 );
 
